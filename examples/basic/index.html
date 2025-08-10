@@ -458,7 +458,13 @@
             // Only support faces rendering in circumcenter mode for now, and limit point count for perf
             const method = document.getElementById('voronoiMethod').value;
             const maxPointsForFaces = 300;
-            if (method !== 'circumcenter' || computation.numPoints > maxPointsForFaces) return;
+            const showFaces = document.getElementById('showVoronoiFaces').checked;
+            voronoiFacesGroup.visible = showFaces;
+            if (!showFaces) return;
+            if (method !== 'circumcenter' || computation.numPoints > maxPointsForFaces) {
+                console.log(`Skipping faces: method=${method}, points=${computation.numPoints}`);
+                return;
+            }
             if (!computation.tetrahedra.length || !computation.barycenters.length) return;
             
             const voronoiFaceColorHex = document.getElementById('voronoiFaceColor').value;
@@ -487,15 +493,31 @@
                 });
             });
 
-            // For each cell, compute the convex hull of its vertices (the barycenters)
+            // For each cell, compute the convex hull of its vertices (the circumcenters)
+            let built = 0;
             cells.forEach((cellVertices) => {
                 if (cellVertices.length < 4) return; // Need at least 4 points for a 3D shape
 
                 // Create a convex geometry from the vertices of the Voronoi cell
-                const geometry = new ConvexGeometry(cellVertices);
+                // Apply MIC to bring all vertices to the same periodic image as the first vertex
+                const ref = cellVertices[0];
+                const adjusted = cellVertices.map(v => {
+                    const out = v.clone();
+                    if (!computation.isPeriodic) return out;
+                    for (let k = 0; k < 3; k++) {
+                        let diff = v.getComponent(k) - ref.getComponent(k);
+                        if (diff > 0.5) out.setComponent(k, v.getComponent(k) - 1.0);
+                        else if (diff < -0.5) out.setComponent(k, v.getComponent(k) + 1.0);
+                    }
+                    return out;
+                });
+
+                const geometry = new ConvexGeometry(adjusted);
                 const mesh = new THREE.Mesh(geometry, material);
                 voronoiFacesGroup.add(mesh);
+                built++;
             });
+            console.log(`Built ${built} Voronoi cell meshes`);
         }
         
         // Unified mesh drawing function that properly handles periodic edges
@@ -717,11 +739,12 @@
                 const stats = computation.getStats();
                 setStatus(`Success! ${stats.numTetrahedra} tetrahedra, ${stats.numVoronoiEdges} Voronoi edges`, true);
                 
-                // Update visualization
+            // Update visualization
                 drawVertices(computation);
                 drawMeshes(computation);
                 drawTetrahedra(computation);
-                drawVoronoiFaces(computation); // Ensure this is called
+            // Ensure faces draw if toggle is on
+            drawVoronoiFaces(computation);
                 
                 updateStats();
                 
@@ -805,8 +828,8 @@
                 drawVoronoiFaces(computation);
             });
             
-            document.getElementById('showVoronoiFaces').addEventListener('change', (e) => {
-                voronoiFacesGroup.visible = e.target.checked;
+            document.getElementById('showVoronoiFaces').addEventListener('change', () => {
+                drawVoronoiFaces(computation);
             });
             
             document.getElementById('regenerate').addEventListener('click', () => {
