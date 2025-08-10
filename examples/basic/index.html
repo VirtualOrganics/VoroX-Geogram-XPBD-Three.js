@@ -154,7 +154,7 @@
         </div>
         <div class="control-group">
             <label>Show Voronoi Faces:</label>
-            <input type="checkbox" id="showVoronoiFaces" checked>
+            <input type="checkbox" id="showVoronoiFaces">
         </div>
         <hr>
         <button id="regenerate">Generate New Points</button>
@@ -455,6 +455,10 @@
         function drawVoronoiFaces(computation) {
             voronoiFacesGroup.clear();
             
+            // Only support faces rendering in circumcenter mode for now, and limit point count for perf
+            const method = document.getElementById('voronoiMethod').value;
+            const maxPointsForFaces = 300;
+            if (method !== 'circumcenter' || computation.numPoints > maxPointsForFaces) return;
             if (!computation.tetrahedra.length || !computation.barycenters.length) return;
             
             const voronoiFaceColorHex = document.getElementById('voronoiFaceColor').value;
