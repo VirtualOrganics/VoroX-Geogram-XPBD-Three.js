@@ -21,10 +21,28 @@ A WebAssembly-powered 3D periodic Delaunay-Voronoi triangulation library for the
 - **WebAssembly Performance**: Native-speed computation in the browser
 - **Three.js Visualization**: Interactive 3D rendering with orbit controls
 - **Clean JavaScript API**: Simple, promise-based interface hiding WASM complexity
+- **VoroX Flow (experimental)**: Visualize active facet flow and cycles ("knots") derived from the Delaunay/Voronoi structure
 
 ## Demo
 
-[Live Demo](https://virtualorganics.github.io/Geogram-VoroX-Three.js/)
+[Live Demo](https://virtualorganics.github.io/Geogram-VoroX-Three.js/examples/basic/index.html)
+
+## VoroX Dynamics (experimental)
+
+The demo includes a first pass of VoroX-inspired dynamics on top of the Delaunay/Voronoi structure:
+
+- **Show VoroX Flow**: draws the "active facet" flow as magenta segments between cell centers (centroids or circumcenters, per Voronoi Method).
+- **Color by Knot**: assigns a distinct hue to each detected cycle ("knot"). Non-cyclic facets remain magenta. This uses the computed `facetToKnot[tet][face]` mapping; different knot IDs map to different HSL hues.
+- **Flow Max Segs**: caps the number of rendered flow segments for performance/readability.
+- **Show VoroX Knots**: highlights segments that are part of cycles (knots) using thicker strokes for easy identification.
+- **Knot Width**: controls the stroke width used to highlight knot segments.
+- **Animate Flow**: when enabled (coming next), animates tracers moving along the active flow directions.
+- **Flow Speed**: speed factor for the animated tracers.
+
+Notes
+- Knots are cycles in the directed flow graph; facets on a knot have distance 0 (`knotDist[tet][face] == 0`).
+- Results differ between barycenter and circumcenter methods and with periodic toggling.
+- This is a visualization aid; dynamics (edge/simplex scaling) can be added next.
 
 ## Quick Start
 
