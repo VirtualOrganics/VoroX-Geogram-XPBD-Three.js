@@ -169,6 +169,10 @@
             <input type="checkbox" id="showGhostCells">
         </div>
         <div class="control-group">
+            <label>Show VoroX Flow:</label>
+            <input type="checkbox" id="showVoroX">
+        </div>
+        <div class="control-group">
             <label>Show Voronoi Faces:</label>
             <input type="checkbox" id="showVoronoiFaces">
         </div>
@@ -187,10 +191,12 @@
         import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
         import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
         import { DelaunayComputation } from '../../src/js/DelaunayComputation.js';
+        import { buildVoroXFlow } from '../../src/js/VoroXDynamics.js';
         import PoissonDiskSampling from 'poisson-disk-sampling';
         
         let scene, camera, renderer, controls;
         let verticesGroup, delaunayGroup, voronoiGroup, tetrahedraGroup, boundaryGroup, voronoiFacesGroup, ghostCellsGroup;
+        let voroxGroup;
         let Module;
         let currentPoints = [];
         let computation = null;
@@ -230,6 +236,7 @@
             boundaryGroup = new THREE.Group();
             voronoiFacesGroup = new THREE.Group();
             ghostCellsGroup = new THREE.Group();
+            voroxGroup = new THREE.Group();
             
             scene.add(verticesGroup);
             scene.add(delaunayGroup);
@@ -238,6 +245,7 @@
             scene.add(boundaryGroup);
             scene.add(voronoiFacesGroup);
             scene.add(ghostCellsGroup);
+            scene.add(voroxGroup);
             
             // Create boundary box
             createBoundaryBox();
@@ -629,6 +637,7 @@
             delaunayGroup.clear();
             voronoiGroup.clear();
             voronoiFacesGroup.clear();
+            voroxGroup.clear();
 
             console.log(`Drawing meshes for ${computation.isPeriodic ? 'PERIODIC' : 'NON-PERIODIC'} mode`);
 
@@ -726,6 +735,29 @@
                 const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
                 sphere.position.set(center[0], center[1], center[2]);
                 voronoiGroup.add(sphere);
+            }
+
+            // Draw VoroX flow if enabled
+            if (document.getElementById('showVoroX').checked) {
+                const centers = computation.barycenters;
+                const faceAdj = computation.getFaceAdjacency();
+                const flow = buildVoroXFlow({ tetrahedra: computation.tetrahedra, centers, faceAdjacency: faceAdj });
+                const mat = new THREE.LineBasicMaterial({ color: 0xff00aa, opacity: 0.9, transparent: true });
+                const segments = [];
+                // visualize activeEdges as small segments from center to neighbor center
+                for (let ti = 0; ti < flow.activeEdges.length; ti++) {
+                    for (let fi = 0; fi < 4; fi++) {
+                        const nxt = flow.activeEdges[ti][fi];
+                        if (!nxt) continue;
+                        const c1 = centers[ti];
+                        const c2 = centers[nxt.tet];
+                        const g = new THREE.BufferGeometry().setFromPoints([
+                            new THREE.Vector3(...c1), new THREE.Vector3(...c2)
+                        ]);
+                        segments.push(new THREE.Line(g, mat));
+                    }
+                }
+                segments.forEach(s => voroxGroup.add(s));
             }
         }
         
@@ -921,6 +953,9 @@
             
             document.getElementById('periodicMode').addEventListener('change', () => {
                 computeDelaunayVoronoi();
+            });
+            document.getElementById('showVoroX').addEventListener('change', () => {
+                drawMeshes(computation);
             });
             
             // Size and color controls

@@ -47,6 +47,7 @@ export class DelaunayComputation {
         this.voronoiEdges = [];
         this.voronoiCells = [];
         this.barycenters = [];
+        this.faceAdjacency = null; // Array[tetIdx][faceId] -> { tet: number, face: number } | null
     }
 
     /**
@@ -81,6 +82,9 @@ export class DelaunayComputation {
                 this.tetrahedra = this._filterTetrahedra(rawResult);
                 console.log(`Computed ${this.tetrahedra.length} valid tetrahedra (filtered from ${rawResult.length})`);
                 
+                // Build face adjacency once (used by Voronoi and VoroX dynamics)
+                this.faceAdjacency = this._buildFaceAdjacency();
+
                 // Compute Voronoi diagram from Delaunay using selected method
                 if (this.voronoiMethod === 'circumcenter') {
                     this._computeVoronoiCircumcentric();
@@ -98,6 +102,52 @@ export class DelaunayComputation {
         }
         
         return this; // Allow chaining
+    }
+
+    /**
+     * Build face adjacency for all tetrahedra.
+     * Returns an array of length nbTets, each entry is an array of 4 faces.
+     * Each face is either null (boundary) or an object { tet, face } pointing to the adjacent face.
+     */
+    _buildFaceAdjacency() {
+        const nbTets = this.tetrahedra.length;
+        const adjacency = Array.from({ length: nbTets }, () => Array(4).fill(null));
+        if (nbTets === 0) return adjacency;
+
+        const faceKey = (a, b, c) => [a, b, c].slice().sort((x, y) => x - y).join('-');
+        const facesOf = (tet) => ([
+            [tet[0], tet[1], tet[2]],
+            [tet[0], tet[1], tet[3]],
+            [tet[0], tet[2], tet[3]],
+            [tet[1], tet[2], tet[3]],
+        ]);
+
+        const map = new Map(); // key -> [{tet, face}...]
+        for (let ti = 0; ti < nbTets; ti++) {
+            const tet = this.tetrahedra[ti];
+            const faces = facesOf(tet);
+            for (let fi = 0; fi < 4; fi++) {
+                const k = faceKey(...faces[fi]);
+                if (!map.has(k)) map.set(k, []);
+                map.get(k).push({ tet: ti, face: fi });
+            }
+        }
+
+        for (const entries of map.values()) {
+            if (entries.length === 2) {
+                const a = entries[0];
+                const b = entries[1];
+                adjacency[a.tet][a.face] = { tet: b.tet, face: b.face };
+                adjacency[b.tet][b.face] = { tet: a.tet, face: a.face };
+            }
+        }
+
+        return adjacency;
+    }
+
+    /** Return the precomputed face adjacency. */
+    getFaceAdjacency() {
+        return this.faceAdjacency || this._buildFaceAdjacency();
     }
 
     /**
