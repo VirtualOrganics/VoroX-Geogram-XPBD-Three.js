@@ -6,7 +6,7 @@
  */
 
 export class DelaunayComputation {
-    constructor(points, isPeriodic = true) {
+    constructor(points, isPeriodic = true, voronoiMethod = 'barycenter') {
         // Convert points to flat array if needed
         if (Array.isArray(points) && Array.isArray(points[0])) {
             // Points provided as [[x,y,z], [x,y,z], ...]
@@ -37,6 +37,9 @@ export class DelaunayComputation {
         }
         
         this.isPeriodic = isPeriodic;
+        // Voronoi construction method: 'barycenter' (default) or 'circumcenter'
+        // Using a string keeps the public API simple and avoids breaking changes
+        this.voronoiMethod = voronoiMethod === 'circumcenter' ? 'circumcenter' : 'barycenter';
         this.numPoints = this.pointsArray.length;
         
         // Results will be stored here
@@ -78,8 +81,12 @@ export class DelaunayComputation {
                 this.tetrahedra = this._filterTetrahedra(rawResult);
                 console.log(`Computed ${this.tetrahedra.length} valid tetrahedra (filtered from ${rawResult.length})`);
                 
-                // Compute Voronoi diagram from Delaunay
-                this._computeVoronoiBarycentric();
+                // Compute Voronoi diagram from Delaunay using selected method
+                if (this.voronoiMethod === 'circumcenter') {
+                    this._computeVoronoiCircumcentric();
+                } else {
+                    this._computeVoronoiBarycentric();
+                }
             } else {
                 console.warn('No tetrahedra generated');
                 this.tetrahedra = [];
@@ -235,6 +242,184 @@ export class DelaunayComputation {
         }
         
         console.log(`Computed ${this.voronoiEdges.length} Voronoi edges.`);
+    }
+
+    /**
+     * Compute Voronoi diagram using tetrahedra circumcenters
+     * - Robustly computes circumcenters with a fallback to centroid when nearly singular
+     * - Handles periodic wrap by adjusting vertices to the same image before computing
+     * @private
+     */
+    _computeVoronoiCircumcentric() {
+        if (this.tetrahedra.length === 0) return;
+
+        console.log("Computing Voronoi diagram using circumcenters...");
+
+        // 1. Compute circumcenter for each tetrahedron
+        const circumcenters = [];
+        for (let i = 0; i < this.tetrahedra.length; i++) {
+            const tetra = this.tetrahedra[i];
+            const p0 = this.pointsArray[tetra[0]];
+            const p1 = this.pointsArray[tetra[1]];
+            const p2 = this.pointsArray[tetra[2]];
+            const p3 = this.pointsArray[tetra[3]];
+
+            let c;
+            if (this.isPeriodic) {
+                // Adjust to the same periodic image using p0 as reference
+                const ref = p0;
+                const adjustPoint = (p) => {
+                    const adjusted = [...p];
+                    for (let dim = 0; dim < 3; dim++) {
+                        const diff = p[dim] - ref[dim];
+                        if (diff > 0.5) adjusted[dim] -= 1.0;
+                        else if (diff < -0.5) adjusted[dim] += 1.0;
+                    }
+                    return adjusted;
+                };
+                const a = [...p0];
+                const b = adjustPoint(p1);
+                const c2 = adjustPoint(p2);
+                const d = adjustPoint(p3);
+
+                c = this._circumcenterOfTetrahedron(a, b, c2, d);
+
+                // Wrap back into [0,1)
+                if (c) {
+                    for (let dim = 0; dim < 3; dim++) {
+                        while (c[dim] < 0) c[dim] += 1.0;
+                        while (c[dim] >= 1) c[dim] -= 1.0;
+                    }
+                }
+            } else {
+                c = this._circumcenterOfTetrahedron(p0, p1, p2, p3);
+            }
+
+            // Fallback to centroid if computation failed or was ill-conditioned
+            if (!c) {
+                const centroid = [
+                    (p0[0] + p1[0] + p2[0] + p3[0]) / 4,
+                    (p0[1] + p1[1] + p2[1] + p3[1]) / 4,
+                    (p0[2] + p1[2] + p2[2] + p3[2]) / 4,
+                ];
+                c = centroid;
+            }
+
+            circumcenters.push(c);
+        }
+
+        // Expose circumcenters via barycenters for downstream visualization (faces, vertices)
+        this.barycenters = circumcenters;
+
+        // 2. Build face-to-tetra adjacency map
+        const faceToTetraMap = new Map();
+        for (let i = 0; i < this.tetrahedra.length; i++) {
+            const tetra = this.tetrahedra[i];
+            const faces = [
+                [tetra[0], tetra[1], tetra[2]],
+                [tetra[0], tetra[1], tetra[3]],
+                [tetra[0], tetra[2], tetra[3]],
+                [tetra[1], tetra[2], tetra[3]],
+            ];
+            faces.forEach((face) => {
+                const key = face.slice().sort((a, b) => a - b).join('-');
+                if (!faceToTetraMap.has(key)) faceToTetraMap.set(key, []);
+                faceToTetraMap.get(key).push(i);
+            });
+        }
+
+        // 3. Connect circumcenters of adjacent tetrahedra
+        this.voronoiEdges = [];
+        const edgeSet = new Set();
+        for (const [_, tets] of faceToTetraMap.entries()) {
+            if (tets.length === 2) {
+                const i1 = tets[0];
+                const i2 = tets[1];
+                const key = i1 < i2 ? `${i1}-${i2}` : `${i2}-${i1}`;
+                if (edgeSet.has(key)) continue;
+                edgeSet.add(key);
+
+                const c1 = circumcenters[i1];
+                const c2 = circumcenters[i2];
+                if (!c1 || !c2) continue;
+
+                this.voronoiEdges.push({
+                    start: c1,
+                    end: c2,
+                    tetraIndices: [i1, i2],
+                    isPeriodic: this._isPeriodicEdge(c1, c2),
+                });
+            }
+        }
+
+        console.log(`Computed ${this.voronoiEdges.length} Voronoi edges (circumcenter method).`);
+    }
+
+    /**
+     * Compute the circumcenter of a tetrahedron defined by 4 points a,b,c,d
+     * Returns null if the matrix is near-singular (degenerate tetrahedron)
+     * Inspired by the robust formulation used in VoroX (circumcenter) and
+     * computed by solving A x = b with rows (b-a), (c-a), (d-a) and b = 0.5*(|p|^2 - |a|^2)
+     * @private
+     */
+    _circumcenterOfTetrahedron(a, b, c, d) {
+        const sub = (u, v) => [u[0] - v[0], u[1] - v[1], u[2] - v[2]];
+        const dot = (u, v) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+
+        const ba = sub(b, a);
+        const ca = sub(c, a);
+        const da = sub(d, a);
+
+        // Build 3x3 matrix A with rows ba, ca, da
+        const A = [
+            [ba[0], ba[1], ba[2]],
+            [ca[0], ca[1], ca[2]],
+            [da[0], da[1], da[2]],
+        ];
+        // b vector: 0.5*(|p|^2 - |a|^2)
+        const a2 = dot(a, a);
+        const rhs = [0.5 * (dot(b, b) - a2), 0.5 * (dot(c, c) - a2), 0.5 * (dot(d, d) - a2)];
+
+        // Solve A x = rhs
+        const x = this._solve3x3(A, rhs);
+        if (!x) return null;
+        return [x[0], x[1], x[2]];
+    }
+
+    /**
+     * Solve a 3x3 linear system using Cramer's rule; return null if near-singular
+     * @private
+     */
+    _solve3x3(A, b) {
+        const det3 = (M) =>
+            M[0][0] * (M[1][1] * M[2][2] - M[1][2] * M[2][1]) -
+            M[0][1] * (M[1][0] * M[2][2] - M[1][2] * M[2][0]) +
+            M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0]);
+
+        const detA = det3(A);
+        if (!isFinite(detA) || Math.abs(detA) < 1e-12) return null;
+
+        const Mx = [
+            [b[0], A[0][1], A[0][2]],
+            [b[1], A[1][1], A[1][2]],
+            [b[2], A[2][1], A[2][2]],
+        ];
+        const My = [
+            [A[0][0], b[0], A[0][2]],
+            [A[1][0], b[1], A[1][2]],
+            [A[2][0], b[2], A[2][2]],
+        ];
+        const Mz = [
+            [A[0][0], A[0][1], b[0]],
+            [A[1][0], A[1][1], b[1]],
+            [A[2][0], A[2][1], b[2]],
+        ];
+
+        const x = det3(Mx) / detA;
+        const y = det3(My) / detA;
+        const z = det3(Mz) / detA;
+        if (![x, y, z].every((v) => isFinite(v))) return null;
+        return [x, y, z];
     }
 
     /**
