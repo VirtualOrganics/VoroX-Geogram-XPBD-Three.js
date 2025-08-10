@@ -473,17 +473,17 @@
                 depthWrite: false // Important for transparent objects
             });
             
-            // Map each original vertex to the barycenters of tetrahedra that contain it
+            // Map each original vertex to the centers (barycenters==circumcenters in this mode)
             const cells = new Map();
             computation.tetrahedra.forEach((tet, index) => {
-                const barycenter = computation.barycenters[index];
-                if (!barycenter) return;
+                const center = computation.barycenters[index];
+                if (!center) return;
 
                 tet.forEach(vertexIndex => {
                     if (!cells.has(vertexIndex)) {
                         cells.set(vertexIndex, []);
                     }
-                    cells.get(vertexIndex).push(new THREE.Vector3(...barycenter));
+                    cells.get(vertexIndex).push(new THREE.Vector3(...center));
                 });
             });
 
@@ -608,70 +608,16 @@
                 const p1 = edge.start;
                 const p2 = edge.end;
                 
-                if (computation.isPeriodic) {
-                    // Calculate the minimum image distance
-                    const p2min = getMinimumImage(p1, p2);
-                    const isPeriodic = (p2min[0] !== p2[0] || p2min[1] !== p2[1] || p2min[2] !== p2[2]);
-                    
-                    if (isPeriodic) {
-                        // Draw periodic edge properly clipped at boundaries
-                        for (let dim = 0; dim < 3; dim++) {
-                            const diff = p2[dim] - p1[dim];
-                            if (Math.abs(diff) > 0.5) {
-                                // This dimension wraps
-                                const t = diff > 0 ? (1.0 - p1[dim]) / diff : (0.0 - p1[dim]) / diff;
-                                
-                                // Clamp t to avoid numerical issues
-                                const tClamped = Math.max(0.001, Math.min(0.999, t));
-                                
-                                const midPoint = [
-                                    p1[0] + tClamped * (p2[0] - p1[0]),
-                                    p1[1] + tClamped * (p2[1] - p1[1]),
-                                    p1[2] + tClamped * (p2[2] - p1[2])
-                                ];
-                                
-                                // Ensure midPoint is exactly at boundary
-                                midPoint[dim] = diff > 0 ? 0.999 : 0.001;
-                                
-                                // Draw first segment to boundary
-                                const geom1 = new THREE.BufferGeometry().setFromPoints([
-                                    new THREE.Vector3(...p1),
-                                    new THREE.Vector3(...midPoint)
-                                ]);
-                                voronoiGroup.add(new THREE.Line(geom1, voronoiPeriodicMaterial));
-                                
-                                // Calculate corresponding point on opposite boundary
-                                const oppositePoint = [...midPoint];
-                                oppositePoint[dim] = diff > 0 ? 0.001 : 0.999;
-                                
-                                // Draw second segment from opposite boundary
-                                const geom2 = new THREE.BufferGeometry().setFromPoints([
-                                    new THREE.Vector3(...oppositePoint),
-                                    new THREE.Vector3(...p2)
-                                ]);
-                                voronoiGroup.add(new THREE.Line(geom2, voronoiPeriodicMaterial));
-                                break; // Only handle the first wrapping dimension
-                            }
-                        }
-                    } else {
-                        // Regular edge within the box
-                        const lineGeom = new THREE.BufferGeometry().setFromPoints([
-                            new THREE.Vector3(...p1), 
-                            new THREE.Vector3(...p2)
-                        ]);
-                        voronoiGroup.add(new THREE.Line(lineGeom, voronoiMaterial));
-                    }
-                } else {
-                    // Regular edge within the box
-                    const lineGeom = new THREE.BufferGeometry().setFromPoints([
-                        new THREE.Vector3(...p1), 
-                        new THREE.Vector3(...p2)
-                    ]);
-                    voronoiGroup.add(new THREE.Line(lineGeom, voronoiMaterial));
-                }
+                // Use MIC minimum-image convention to avoid cross-box lines
+                const q2 = computation.isPeriodic ? getMinimumImage(p1, p2) : p2;
+                const lineGeom = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(...p1), 
+                    new THREE.Vector3(...q2)
+                ]);
+                voronoiGroup.add(new THREE.Line(lineGeom, computation.isPeriodic ? voronoiPeriodicMaterial : voronoiMaterial));
             }
             
-            // Draw Voronoi vertices (barycenters)
+            // Draw Voronoi vertices (barycenters or circumcenters)
             const voronoiVertexSize = parseFloat(document.getElementById('voronoiSize').value);
             const voronoiVertexColorHex = document.getElementById('voronoiVertexColor').value;
             const voronoiVertexColorInt = parseInt(voronoiVertexColorHex.substring(1), 16);

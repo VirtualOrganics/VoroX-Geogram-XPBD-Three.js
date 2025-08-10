@@ -308,6 +308,9 @@ export class DelaunayComputation {
             circumcenters.push(c);
         }
 
+        // Expose circumcenters via barycenters for downstream visualization (faces, vertices)
+        this.barycenters = circumcenters;
+
         // 2. Build face-to-tetra adjacency map
         const faceToTetraMap = new Map();
         for (let i = 0; i < this.tetrahedra.length; i++) {
