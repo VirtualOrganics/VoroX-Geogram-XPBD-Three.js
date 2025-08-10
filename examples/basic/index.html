@@ -268,6 +268,88 @@
             // Refresh ghost cell tiling if toggled
             createGhostCellTiling();
         }
+
+        // Ghost cells tiling (26 neighbors) using MIC-thin edges
+        function createGhostCellTiling() {
+            // Cleanup previous
+            ghostCellsGroup.children.forEach(child => {
+                if (child.isGroup) {
+                    child.children.forEach(c => {
+                        if (c.geometry) c.geometry.dispose();
+                        if (c.material) c.material.dispose();
+                    });
+                }
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) child.material.dispose();
+            });
+            ghostCellsGroup.clear();
+
+            if (!computation) return;
+            if (!document.getElementById('showGhostCells').checked) return;
+
+            // Colors
+            const delaunayEdgeColorHex = document.getElementById('delaunayEdgeColor').value;
+            const delaunayEdgeColorInt = parseInt(delaunayEdgeColorHex.substring(1), 16);
+            const voronoiEdgeColorHex = document.getElementById('voronoiEdgeColor').value;
+            const voronoiEdgeColorInt = parseInt(voronoiEdgeColorHex.substring(1), 16);
+
+            const ghostDelaunayMaterial = new THREE.LineBasicMaterial({ color: delaunayEdgeColorInt, opacity: 0.3, transparent: true });
+            const ghostVoronoiMaterial = new THREE.LineBasicMaterial({ color: voronoiEdgeColorInt, opacity: 0.2, transparent: true });
+
+            // Build base geometries (thin line segments) using MIC
+            const buildDelaunayGeometry = () => {
+                const positions = [];
+                const edgeSet = new Set();
+                for (const tet of computation.tetrahedra) {
+                    const edges = [[tet[0],tet[1]],[tet[0],tet[2]],[tet[0],tet[3]],[tet[1],tet[2]],[tet[1],tet[3]],[tet[2],tet[3]]];
+                    for (const [a,b] of edges) {
+                        const key = a < b ? `${a}-${b}` : `${b}-${a}`;
+                        if (edgeSet.has(key)) continue;
+                        edgeSet.add(key);
+                        const p1 = computation.pointsArray[a];
+                        const p2 = computation.isPeriodic ? getMinimumImage(p1, computation.pointsArray[b]) : computation.pointsArray[b];
+                        positions.push(p1[0],p1[1],p1[2], p2[0],p2[1],p2[2]);
+                    }
+                }
+                const geom = new THREE.BufferGeometry();
+                geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+                return geom;
+            };
+
+            const buildVoronoiGeometry = () => {
+                const positions = [];
+                for (const edge of computation.voronoiEdges) {
+                    const p1 = edge.start;
+                    const p2 = computation.isPeriodic ? getMinimumImage(p1, edge.end) : edge.end;
+                    positions.push(p1[0],p1[1],p1[2], p2[0],p2[1],p2[2]);
+                }
+                const geom = new THREE.BufferGeometry();
+                geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+                return geom;
+            };
+
+            const delaunayGeometry = buildDelaunayGeometry();
+            const voronoiGeometry = buildVoronoiGeometry();
+
+            // Offsets of 26 neighbor cells
+            const offsets = [];
+            for (let x=-1; x<=1; x++) for (let y=-1; y<=1; y++) for (let z=-1; z<=1; z++) {
+                if (x===0 && y===0 && z===0) continue;
+                offsets.push([x,y,z]);
+            }
+
+            for (const [ox,oy,oz] of offsets) {
+                const g = new THREE.Group();
+                g.position.set(ox,oy,oz);
+                if (delaunayGeometry && document.getElementById('showDelaunay').checked) {
+                    g.add(new THREE.LineSegments(delaunayGeometry.clone(), ghostDelaunayMaterial));
+                }
+                if (voronoiGeometry && document.getElementById('showVoronoi').checked) {
+                    g.add(new THREE.LineSegments(voronoiGeometry.clone(), ghostVoronoiMaterial));
+                }
+                ghostCellsGroup.add(g);
+            }
+        }
         
         // Generate well-distributed points using Poisson disk sampling
         function generatePoissonPoints(targetCount, minDistance) {
@@ -850,9 +932,7 @@
                 drawVertices(computation);
             });
             
-            document.getElementById('delaunayEdgeColor').addEventListener('change', () => {
-                drawMeshes(computation);
-            });
+            document.getElementById('delaunayEdgeColor').addEventListener('change', () => { drawMeshes(computation); createGhostCellTiling(); });
             document.getElementById('useMIC').addEventListener('change', (e) => {
                 document.getElementById('delaunayEdgeWidth').disabled = !e.target.checked;
                 document.getElementById('voronoiEdgeWidth').disabled = !e.target.checked;
@@ -872,9 +952,7 @@
                 drawMeshes(computation);
             });
 
-            document.getElementById('voronoiEdgeColor').addEventListener('change', () => {
-                drawMeshes(computation);
-            });
+            document.getElementById('voronoiEdgeColor').addEventListener('change', () => { drawMeshes(computation); createGhostCellTiling(); });
             
             document.getElementById('tetraColor').addEventListener('change', () => {
                 drawTetrahedra(computation);
