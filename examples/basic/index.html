@@ -455,14 +455,13 @@
         function drawVoronoiFaces(computation) {
             voronoiFacesGroup.clear();
             
-            // Only support faces rendering in circumcenter mode for now, and limit point count for perf
-            const method = document.getElementById('voronoiMethod').value;
+            // Support faces for both barycenter and circumcenter methods; limit point count for perf
             const maxPointsForFaces = 300;
             const showFaces = document.getElementById('showVoronoiFaces').checked;
             voronoiFacesGroup.visible = showFaces;
             if (!showFaces) return;
-            if (method !== 'circumcenter' || computation.numPoints > maxPointsForFaces) {
-                console.log(`Skipping faces: method=${method}, points=${computation.numPoints}`);
+            if (computation.numPoints > maxPointsForFaces) {
+                console.log(`Skipping faces: points=${computation.numPoints} > ${maxPointsForFaces}`);
                 return;
             }
             if (!computation.tetrahedra.length || !computation.barycenters.length) return;
@@ -493,7 +492,7 @@
                 });
             });
 
-            // For each cell, compute the convex hull of its vertices (the circumcenters)
+            // For each cell, compute the convex hull of its vertices (centers)
             let built = 0;
             cells.forEach((cellVertices) => {
                 if (cellVertices.length < 4) return; // Need at least 4 points for a 3D shape
