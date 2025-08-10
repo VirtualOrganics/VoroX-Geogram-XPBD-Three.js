@@ -14,15 +14,6 @@
     </script>
     <style>
         body { margin: 0; overflow: hidden; font-family: Arial, sans-serif; }
-        #info {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background: rgba(255, 255, 255, 0.9);
-            padding: 15px;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        }
         #controls {
             position: absolute;
             top: 10px;
@@ -31,18 +22,30 @@
             padding: 15px;
             border-radius: 5px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            width: 250px;
+            width: 380px;
         }
+        #controls-content { max-height: calc(100vh - 40px); overflow-y: auto; }
         .control-group {
             margin: 10px 0;
         }
+        .section-header { font-weight: bold; margin: 12px 0 6px 0; padding: 6px 8px; background: #f2f2f2; border-radius: 4px; }
+        #controls-toggle { background: #007bff; color: #fff; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; margin-bottom: 8px; }
+        #controls.hidden { width: auto; padding: 8px 10px; }
+        #controls.hidden #controls-content { display: none; }
+        .row-2 { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; align-items: center; }
+        .row-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; align-items: center; }
+        .row-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; align-items: center; }
+        .sub-label { font-size: 12px; text-align: center; opacity: 0.85; }
+        .inline-pair { display: flex; align-items: center; gap: 8px; }
+        .inline-tight { gap: 4px; }
         label {
             display: inline-block;
-            width: 120px;
+            width: 100px;
             font-size: 14px;
+            white-space: nowrap;
         }
         input[type="number"] {
-            width: 60px;
+            width: 80px;
         }
         button {
             margin: 5px 0;
@@ -60,65 +63,14 @@
     </style>
 </head>
 <body>
-    <div id="info">
-        <h3>3D Periodic Delaunay-Voronoi Triangulation</h3>
-        <div id="stats">Loading...</div>
-    </div>
     
-    <div id="controls">
-        <h4>Controls</h4>
-        <div class="control-group">
-            <label>Periodic Mode:</label>
-            <input type="checkbox" id="periodicMode">
-        </div>
-        <div class="control-group">
-            <label>Number of Points:</label>
-            <input type="number" id="numPoints" value="150" min="4" max="200">
-        </div>
-        <div class="control-group">
-            <label>Min Distance:</label>
-            <input type="number" id="minDistance" value="0.05" min="0.01" max="0.2" step="0.01">
-        </div>
-        <div class="control-group">
-            <label>Poisson Sampling:</label>
-            <input type="checkbox" id="poissonSampling" checked>
-        </div>
-        <hr>
-        <div class="control-group">
-            <label>Delaunay Size:</label>
-            <input type="number" id="delaunaySize" value="0.005" min="0.005" max="0.05" step="0.005">
-        </div>
-        <div class="control-group">
-            <label>Vertex Color:</label>
-            <input type="color" id="vertexColor" value="#000000">
-        </div>
-        <div class="control-group">
-            <label>Delaunay Edge Color:</label>
-            <input type="color" id="delaunayEdgeColor" value="#808080">
-        </div>
-        <div class="control-group">
-            <label>Voronoi Size:</label>
-            <input type="number" id="voronoiSize" value="0.005" min="0.005" max="0.05" step="0.005">
-        </div>
-        <div class="control-group">
-            <label>Voronoi Vertex Color:</label>
-            <input type="color" id="voronoiVertexColor" value="#0000FF">
-        </div>
-        <div class="control-group">
-            <label>Voronoi Edge Color:</label>
-            <input type="color" id="voronoiEdgeColor" value="#4169E1">
-        </div>
-        <div class="control-group">
-            <label>MIC (Thick Edges):</label>
-            <input type="checkbox" id="useMIC">
-        </div>
-        <div class="control-group">
-            <label>Delaunay Width:</label>
-            <input type="number" id="delaunayEdgeWidth" value="2" min="1" max="10" step="1" disabled>
-        </div>
-        <div class="control-group">
-            <label>Voronoi Width:</label>
-            <input type="number" id="voronoiEdgeWidth" value="2" min="1" max="10" step="1" disabled>
+    <div id="controls" class="controls-container">
+        <button id="controls-toggle" title="Hide Controls">hide</button>
+        <div id="controls-content">
+        <div class="section-header">Voro-X / Geogram</div>
+        <div class="control-group row-2">
+            <div class="inline-pair"><label>Points:</label><input type="number" id="numPoints" value="150" min="4" max="5000"></div>
+            <div class="inline-pair inline-tight"><label>Min Dist:</label><input style="margin-left:-6px" type="number" id="minDistance" value="0.05" min="0.001" max="0.3" step="0.001"></div>
         </div>
         <div class="control-group">
             <label>Voronoi Method:</label>
@@ -127,55 +79,144 @@
                 <option value="circumcenter">Circumcenter</option>
             </select>
         </div>
-        <div class="control-group">
-            <label>Tetra Color:</label>
-            <input type="color" id="tetraColor" value="#D3D3D3">
+        <div class="control-group row-3">
+            <div class="sub-label">Periodic</div>
+            <div class="sub-label">Ghost Cells</div>
+            <div class="sub-label">MIC</div>
+            <div style="text-align:center"><input type="checkbox" id="periodicMode"></div>
+            <div style="text-align:center"><input type="checkbox" id="showGhostCells"></div>
+            <div style="text-align:center"><input type="checkbox" id="useMIC"></div>
         </div>
-        <div class="control-group">
-            <label>Tetra Opacity:</label>
-            <input type="number" id="tetraOpacity" value="0.01" min="0.0" max="1.0" step="0.01">
-        </div>
-        <div class="control-group">
-            <label>Voronoi Face Color:</label>
-            <input type="color" id="voronoiFaceColor" value="#ADD8E6">
-        </div>
-        <div class="control-group">
-            <label>Voronoi Face Opacity:</label>
-            <input type="number" id="voronoiFaceOpacity" value="0.04" min="0.0" max="1.0" step="0.01">
+        <div class="control-group row-3">
+            <div class="sub-label">Background</div>
+            <div class="sub-label">Boundary</div>
+            <div class="sub-label">Poisson</div>
+            <div style="text-align:center"><input type="color" id="backgroundColor" value="#f0f0f0"></div>
+            <div style="text-align:center"><input type="checkbox" id="showBoundary" checked></div>
+            <div style="text-align:center"><input type="checkbox" id="poissonSampling" checked></div>
         </div>
         <hr>
+        <div class="section-header">Delaunay Triangles / Tetrahedra</div>
+        <div class="control-group row-3">
+            <div class="sub-label">Vertices</div>
+            <div class="sub-label">Delaunay</div>
+            <div class="sub-label">Tetrahedra</div>
+            <div style="text-align:center"><input type="checkbox" id="showVertices" checked></div>
+            <div style="text-align:center"><input type="checkbox" id="showDelaunay" checked></div>
+            <div style="text-align:center"><input type="checkbox" id="showTetrahedra" checked></div>
+        </div>
+        <div class="control-group row-2">
+            <div>
+                <label>Point Size:</label>
+                <input type="number" id="delaunaySize" value="0.005" min="0.001" max="0.05" step="0.001">
+            </div>
+            <div>
+                <label>Color:</label>
+                <input type="color" id="vertexColor" value="#000000">
+            </div>
+        </div>
+        <div class="control-group row-2">
+            <div>
+                <label>Edge Width:</label>
+                <input type="number" id="delaunayEdgeWidth" value="2" min="1" max="10" step="1" disabled>
+            </div>
+            <div>
+                <label>Color:</label>
+                <input type="color" id="delaunayEdgeColor" value="#808080">
+            </div>
+        </div>
+        <div class="control-group row-2">
+            <div>
+                <label>Tetra Color:</label>
+                <input type="color" id="tetraColor" value="#D3D3D3">
+            </div>
+            <div>
+                <label>Opacity:</label>
+                <input type="number" id="tetraOpacity" value="0.01" min="0.0" max="1.0" step="0.01">
+            </div>
+        </div>
+        <hr>
+        <div class="section-header">Voronoi Diagrams</div>
+        <div class="control-group row-3">
+            <div class="sub-label">Vertices</div>
+            <div class="sub-label">Edges</div>
+            <div class="sub-label">Faces</div>
+            <div style="text-align:center"><input type="checkbox" id="showVoronoi"></div>
+            <div style="text-align:center"><input type="checkbox" id="showVoronoiEdgesToggle"></div>
+            <div style="text-align:center"><input type="checkbox" id="showVoronoiFaces"></div>
+        </div>
+        <div class="control-group row-2">
+            <div>
+                <label>Point Size:</label>
+                <input type="number" id="voronoiSize" value="0.005" min="0.001" max="0.05" step="0.001">
+            </div>
+            <div>
+                <label>Color:</label>
+                <input type="color" id="voronoiVertexColor" value="#0000FF">
+            </div>
+        </div>
+        <div class="control-group row-2">
+            <div>
+                <label>Edge Width:</label>
+                <input type="number" id="voronoiEdgeWidth" value="2" min="1" max="10" step="1" disabled>
+            </div>
+            <div>
+                <label>Color:</label>
+                <input type="color" id="voronoiEdgeColor" value="#4169E1">
+            </div>
+        </div>
+        <!-- Move Tetra controls to Delaunay section and place Voronoi Method later -->
         <div class="control-group">
-            <label>Show Vertices:</label>
-            <input type="checkbox" id="showVertices" checked>
+            <div class="row-2">
+                <div>
+                    <label>Faces Color:</label>
+                    <input type="color" id="voronoiFaceColor" value="#ADD8E6">
+                </div>
+                <div>
+                    <label>Opacity:</label>
+                    <input type="number" id="voronoiFaceOpacity" value="0.04" min="0.0" max="1.0" step="0.01">
+                </div>
+            </div>
         </div>
         <div class="control-group">
-            <label>Show Delaunay:</label>
-            <input type="checkbox" id="showDelaunay" checked>
+            <label>Voronoi Method:</label>
+            <select id="voronoiMethod">
+                <option value="barycenter" selected>Barycenter</option>
+                <option value="circumcenter">Circumcenter</option>
+            </select>
+        </div>
+        <hr>
+        <div class="section-header">Flow Dynamics</div>
+        <div class="control-group">
+            <div class="row-2">
+                <div class="inline-pair"><input type="checkbox" id="showVoroX"><label>Flow</label></div>
+                <div class="inline-pair"><label>Max Segs:</label><input type="number" id="voroxMaxSegs" value="2000" min="100" max="20000" step="100"></div>
+            </div>
         </div>
         <div class="control-group">
-            <label>Show Voronoi:</label>
-            <input type="checkbox" id="showVoronoi" checked>
+            <div class="row-2">
+                <div class="inline-pair"><input type="checkbox" id="showVoroXKnots" checked><label>Knots</label></div>
+                <div class="inline-pair"><label>Size:</label><input type="number" id="voroxKnotWidth" value="2.5" min="1" max="10" step="0.5"></div>
+            </div>
         </div>
         <div class="control-group">
-            <label>Show Tetrahedra:</label>
-            <input type="checkbox" id="showTetrahedra" checked>
+            <div class="row-2">
+                <div class="inline-pair"><input type="checkbox" id="animateVoroXFlow"><label>Animate</label></div>
+                <div class="inline-pair"><label>Speed:</label><input type="number" id="voroxFlowSpeed" value="0.6" min="0.1" max="5" step="0.1"></div>
+            </div>
         </div>
-        <div class="control-group">
-            <label>Show Boundary:</label>
-            <input type="checkbox" id="showBoundary" checked>
-        </div>
-        <div class="control-group">
-            <label>Show Ghost Cells:</label>
-            <input type="checkbox" id="showGhostCells">
-        </div>
-        <div class="control-group">
-            <label>Show Voronoi Faces:</label>
-            <input type="checkbox" id="showVoronoiFaces">
+        <div class="control-group" style="margin-top:8px">
+            <div class="inline-pair"><input type="checkbox" id="voroxColorByKnot" checked><label for="voroxColorByKnot">Color by Knot</label></div>
         </div>
         <hr>
         <button id="regenerate">Generate New Points</button>
         <button id="recompute">Recompute Triangulation</button>
         <div id="status" class="status"></div>
+        <div id="stats" style="font-size:12px; margin-top:8px">
+            <span id="statsCore">Loading...</span><br>
+            <span id="statsPerf"></span>
+        </div>
+        </div>
     </div>
     
     <script src="../../dist/periodic_delaunay.js"></script>
@@ -187,18 +228,25 @@
         import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
         import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
         import { DelaunayComputation } from '../../src/js/DelaunayComputation.js';
+        import { buildVoroXFlow } from '../../src/js/VoroXDynamics.js';
         import PoissonDiskSampling from 'poisson-disk-sampling';
         
         let scene, camera, renderer, controls;
         let verticesGroup, delaunayGroup, voronoiGroup, tetrahedraGroup, boundaryGroup, voronoiFacesGroup, ghostCellsGroup;
+        let voroxGroup, voroxTracerGroup;
         let Module;
         let currentPoints = [];
         let computation = null;
+        let voroxFlowCache = null; // cached flow from last draw
+        let voroxCenters = null;   // cached centers
+        let voroxTracers = [];     // active tracer particles
+        let lastFrameTime = performance.now();
+        let lastFPSUpdate = performance.now();
         
         // Initialize Three.js
         function initThree() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0xf0f0f0);
+            scene.background = new THREE.Color(0xc2c2c2);
             
             camera = new THREE.PerspectiveCamera(
                 75, window.innerWidth / window.innerHeight, 0.1, 1000
@@ -230,6 +278,8 @@
             boundaryGroup = new THREE.Group();
             voronoiFacesGroup = new THREE.Group();
             ghostCellsGroup = new THREE.Group();
+            voroxGroup = new THREE.Group();
+            voroxTracerGroup = new THREE.Group();
             
             scene.add(verticesGroup);
             scene.add(delaunayGroup);
@@ -238,6 +288,8 @@
             scene.add(boundaryGroup);
             scene.add(voronoiFacesGroup);
             scene.add(ghostCellsGroup);
+            scene.add(voroxGroup);
+            scene.add(voroxTracerGroup);
             
             // Create boundary box
             createBoundaryBox();
@@ -262,8 +314,9 @@
             line.position.set(0.5, 0.5, 0.5);
             boundaryGroup.add(line);
             
-            // Add axes helpers
+            // Add axes helpers (toggle with boundary)
             const axesHelper = new THREE.AxesHelper(0.2);
+            axesHelper.name = 'axesHelper';
             scene.add(axesHelper);
             // Refresh ghost cell tiling if toggled
             createGhostCellTiling();
@@ -629,6 +682,7 @@
             delaunayGroup.clear();
             voronoiGroup.clear();
             voronoiFacesGroup.clear();
+            voroxGroup.clear();
 
             console.log(`Drawing meshes for ${computation.isPeriodic ? 'PERIODIC' : 'NON-PERIODIC'} mode`);
 
@@ -726,6 +780,68 @@
                 const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
                 sphere.position.set(center[0], center[1], center[2]);
                 voronoiGroup.add(sphere);
+            }
+
+            // Draw VoroX flow if enabled
+            if (document.getElementById('showVoroX').checked) {
+                const centers = computation.barycenters;
+                const faceAdj = computation.getFaceAdjacency();
+                const flow = buildVoroXFlow({ tetrahedra: computation.tetrahedra, centers, faceAdjacency: faceAdj });
+                const colorByKnot = document.getElementById('voroxColorByKnot').checked;
+                const maxSegs = parseInt(document.getElementById('voroxMaxSegs').value);
+                voroxFlowCache = flow;
+                voroxCenters = centers;
+
+                let drawn = 0;
+                for (let ti = 0; ti < flow.activeEdges.length; ti++) {
+                    for (let fi = 0; fi < 4; fi++) {
+                        if (drawn >= maxSegs) break;
+                        const nxt = flow.activeEdges[ti][fi];
+                        if (!nxt) continue;
+                        let c1 = centers[ti];
+                        let c2 = centers[nxt.tet];
+                        if (computation.isPeriodic) {
+                            c2 = getMinimumImage(c1, c2);
+                        }
+                        const col = colorByKnot && flow.facetToKnot[ti][fi] > 0
+                            ? new THREE.Color().setHSL((flow.facetToKnot[ti][fi] * 0.1375) % 1, 0.85, 0.5)
+                            : new THREE.Color(0xff00aa);
+                        const mat = new THREE.LineBasicMaterial({ color: col.getHex(), opacity: 0.9, transparent: true });
+                        const g = new THREE.BufferGeometry().setFromPoints([
+                            new THREE.Vector3(...c1), new THREE.Vector3(...c2)
+                        ]);
+                        voroxGroup.add(new THREE.Line(g, mat));
+                        drawn++;
+                    }
+                }
+
+                // Highlight knots (cycles) if enabled
+                if (document.getElementById('showVoroXKnots').checked && flow.knots.length) {
+                    const baseWidth = parseFloat(document.getElementById('voroxKnotWidth').value);
+                    for (const knot of flow.knots) {
+                        for (let i = 0; i < knot.length; i++) {
+                            const a = knot[i];
+                            const b = flow.activeEdges[a.tet][a.face];
+                            if (!b) continue;
+                            let c1 = centers[a.tet];
+                            let c2 = centers[b.tet];
+                            if (computation.isPeriodic) {
+                                c2 = getMinimumImage(c1, c2);
+                            }
+                            const mat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: baseWidth, opacity: 1.0 });
+                            const g = new THREE.BufferGeometry().setFromPoints([
+                                new THREE.Vector3(...c1), new THREE.Vector3(...c2)
+                            ]);
+                            voroxGroup.add(new THREE.Line(g, mat));
+                        }
+                    }
+                }
+                // Initialize tracers if animation is on
+                if (document.getElementById('animateVoroXFlow').checked) {
+                    initVoroxTracers(flow, centers);
+                } else {
+                    clearVoroxTracers();
+                }
             }
         }
         
@@ -831,12 +947,9 @@
             if (!computation) return;
             
             const stats = computation.getStats();
-            document.getElementById('stats').innerHTML = `
-                <strong>Mode:</strong> ${stats.isPeriodic ? 'Periodic' : 'Non-periodic'}<br>
-                <strong>Vertices:</strong> ${stats.numPoints}<br>
-                <strong>Tetrahedra:</strong> ${stats.numTetrahedra}<br>
-                <strong>Voronoi Edges:</strong> ${stats.numVoronoiEdges}
-            `;
+            const fps = (1000 / (performance.now() - lastFrameTime)).toFixed(0);
+            document.getElementById('statsCore').textContent = `Mode: ${stats.isPeriodic ? 'Periodic' : 'Non-periodic'} | Vertices: ${stats.numPoints} | Tetrahedra: ${stats.numTetrahedra} | Voronoi Edges: ${stats.numVoronoiEdges}`;
+            document.getElementById('statsPerf').textContent = `FPS: ${fps}`;
         }
         
         // Set status message
@@ -850,7 +963,80 @@
         function animate() {
             requestAnimationFrame(animate);
             controls.update();
+            updateVoroxTracers();
             renderer.render(scene, camera);
+            const now = performance.now();
+            if (now - lastFPSUpdate > 500) {
+                const fps = (1000 / (now - lastFrameTime)).toFixed(0);
+                const perfEl = document.getElementById('statsPerf');
+                if (perfEl) perfEl.textContent = `FPS: ${fps}`;
+                lastFPSUpdate = now;
+            }
+            lastFrameTime = now;
+        }
+
+        // --- VoroX flow animation helpers ---
+        function clearVoroxTracers() {
+            voroxTracerGroup.children.forEach(child => {
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) child.material.dispose();
+            });
+            voroxTracerGroup.clear();
+            voroxTracers = [];
+        }
+
+        function initVoroxTracers(flow, centers) {
+            clearVoroxTracers();
+            // Seed a small set of tracers from random facets
+            const numTracers = Math.min(200, centers.length * 2);
+            for (let i = 0; i < numTracers; i++) {
+                const tet = Math.floor(Math.random() * flow.activeEdges.length);
+                const face = Math.floor(Math.random() * 4);
+                const next = flow.activeEdges[tet][face];
+                if (!next) continue;
+                const start = new THREE.Vector3(...centers[tet]);
+                const end = new THREE.Vector3(...centers[next.tet]);
+                const dir = new THREE.Vector3().subVectors(end, start);
+                const geom = new THREE.SphereGeometry(0.003, 8, 8);
+                const mat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                const mesh = new THREE.Mesh(geom, mat);
+                mesh.position.copy(start);
+                voroxTracerGroup.add(mesh);
+                voroxTracers.push({ mesh, curTet: tet, curFace: face, t: 0, dir, start, end });
+            }
+        }
+
+        function stepTracer(tr, dt) {
+            const speed = parseFloat(document.getElementById('voroxFlowSpeed').value);
+            tr.t += dt * speed;
+            if (tr.t >= 1) {
+                // Move to next edge in flow
+                const flow = voroxFlowCache;
+                const centers = voroxCenters;
+                const nextFacet = flow.activeEdges[tr.curTet][tr.curFace];
+                if (!nextFacet) {
+                    tr.t = 0; return; // stall
+                }
+                const nextNext = flow.activeEdges[nextFacet.tet][nextFacet.face];
+                tr.curTet = nextFacet.tet;
+                tr.curFace = nextFacet.face;
+                tr.start = new THREE.Vector3(...centers[tr.curTet]);
+                const nextTet = (nextNext && nextNext.tet) || tr.curTet;
+                tr.end = new THREE.Vector3(...centers[nextTet]);
+                tr.dir = new THREE.Vector3().subVectors(tr.end, tr.start);
+                tr.t = 0;
+            }
+            const pos = new THREE.Vector3().copy(tr.start).addScaledVector(tr.dir, tr.t);
+            tr.mesh.position.copy(pos);
+        }
+
+        function updateVoroxTracers() {
+            if (!document.getElementById('animateVoroXFlow').checked) return;
+            if (!voroxTracers.length || !voroxFlowCache || !voroxCenters) return;
+            const now = performance.now();
+            const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
+            lastFrameTime = now;
+            for (const tr of voroxTracers) stepTracer(tr, dt);
         }
         
         // Initialize everything
@@ -859,6 +1045,25 @@
             setStatus('Module loaded', true);
             
             initThree();
+            // Panel hide/show
+            document.getElementById('controls-toggle').addEventListener('click', () => {
+                const panel = document.getElementById('controls');
+                const btn = document.getElementById('controls-toggle');
+                if (panel.classList.contains('hidden')) {
+                    panel.classList.remove('hidden');
+                    btn.textContent = 'hide';
+                    btn.title = 'Hide Controls';
+                } else {
+                    panel.classList.add('hidden');
+                    btn.textContent = 'show';
+                    btn.title = 'Show Controls';
+                }
+            });
+
+            // Background color control
+            document.getElementById('backgroundColor').addEventListener('change', (e) => {
+                scene.background = new THREE.Color(e.target.value);
+            });
             
             // Generate initial points
             const numPoints = parseInt(document.getElementById('numPoints').value);
@@ -880,9 +1085,12 @@
                 delaunayGroup.visible = e.target.checked;
             });
             
-            document.getElementById('showVoronoi').addEventListener('change', (e) => {
-                voronoiGroup.visible = e.target.checked;
-            });
+            const voronoiEdgesToggle = document.getElementById('showVoronoiEdgesToggle');
+            if (voronoiEdgesToggle) {
+                voronoiEdgesToggle.addEventListener('change', (e) => {
+                    voronoiGroup.visible = e.target.checked;
+                });
+            }
             
             document.getElementById('showTetrahedra').addEventListener('change', (e) => {
                 tetrahedraGroup.visible = e.target.checked;
@@ -890,6 +1098,8 @@
             
             document.getElementById('showBoundary').addEventListener('change', (e) => {
                 boundaryGroup.visible = e.target.checked;
+                const axes = scene.getObjectByName('axesHelper');
+                if (axes) axes.visible = e.target.checked;
             });
 
             document.getElementById('voronoiFaceColor').addEventListener('change', () => {
@@ -922,6 +1132,11 @@
             document.getElementById('periodicMode').addEventListener('change', () => {
                 computeDelaunayVoronoi();
             });
+            document.getElementById('showVoroX').addEventListener('change', () => drawMeshes(computation));
+            document.getElementById('voroxColorByKnot').addEventListener('change', () => drawMeshes(computation));
+            document.getElementById('voroxMaxSegs').addEventListener('change', () => drawMeshes(computation));
+            document.getElementById('showVoroXKnots').addEventListener('change', () => drawMeshes(computation));
+            document.getElementById('voroxKnotWidth').addEventListener('change', () => drawMeshes(computation));
             
             // Size and color controls
             document.getElementById('delaunaySize').addEventListener('change', () => {
