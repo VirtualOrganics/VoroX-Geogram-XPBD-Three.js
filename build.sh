@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Build script for Geogram-Three.js
+# Build script for Geogram-VoroX-Three.js
 # Requires Emscripten SDK to be installed and activated
 
-echo "Building Geogram-Three.js..."
+echo "Building Geogram-VoroX-Three.js..."
 
 # Check if emcc is available
 if ! command -v em++ &> /dev/null; then
