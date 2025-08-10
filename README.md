@@ -24,7 +24,7 @@ A WebAssembly-powered 3D periodic Delaunay-Voronoi triangulation library for the
 
 ## Demo
 
-[Live Demo](https://virtualorganics.github.io/Geogram-Three.js/)
+[Live Demo](https://virtualorganics.github.io/Geogram-VoroX-Three.js/)
 
 ## Quick Start
 
