@@ -109,6 +109,13 @@
             <input type="color" id="voronoiEdgeColor" value="#4169E1">
         </div>
         <div class="control-group">
+            <label>Voronoi Method:</label>
+            <select id="voronoiMethod">
+                <option value="barycenter" selected>Barycenter</option>
+                <option value="circumcenter">Circumcenter</option>
+            </select>
+        </div>
+        <div class="control-group">
             <label>Tetra Color:</label>
             <input type="color" id="tetraColor" value="#D3D3D3">
         </div>
@@ -399,7 +406,7 @@
             
             if (computation.voronoiEdges.length === 0) return;
             
-            const voronoiColorHex = document.getElementById('voronoiColor').value;
+            const voronoiColorHex = document.getElementById('voronoiEdgeColor').value;
             const voronoiColorInt = parseInt(voronoiColorHex.substring(1), 16);
             
             const material = new THREE.LineBasicMaterial({ 
@@ -750,7 +757,8 @@
             
             try {
                 // Create computation instance
-                computation = new DelaunayComputation(currentPoints, isPeriodic);
+            const method = document.getElementById('voronoiMethod').value;
+            computation = new DelaunayComputation(currentPoints, isPeriodic, method);
                 
                 // Run the computation
                 await computation.compute(Module);
