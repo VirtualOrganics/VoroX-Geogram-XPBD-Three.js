@@ -1,6 +1,6 @@
 # Geogram-VoroX-Three.js
 
-[Live Demo](https://virtualorganics.github.io/Geogram-VoroX-Three.js/examples/basic/index.html)
+[Live Demo](https://virtualorganics.github.io/Geogram-VoroX-Three.js/)
 
 A WebAssembly-powered 3D periodic Delaunay-Voronoi triangulation library for the browser, combining the computational power of [Geogram](https://github.com/BrunoLevy/geogram) with the visualization capabilities of [Three.js](https://github.com/mrdoob/three.js). This variant adds a VoroX-inspired circumcenter-based Voronoi construction alongside the existing barycenter method.
 
@@ -25,7 +25,7 @@ A WebAssembly-powered 3D periodic Delaunay-Voronoi triangulation library for the
 
 ## Demo
 
-[Live Demo](https://virtualorganics.github.io/Geogram-VoroX-Three.js/examples/basic/index.html)
+[Live Demo](https://virtualorganics.github.io/Geogram-VoroX-Three.js/)
 
 ## VoroX Dynamics (experimental)
 
