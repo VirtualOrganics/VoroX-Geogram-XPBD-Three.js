@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/run-tests.mjs"
+    "test": "node tests/run-tests.mjs",
+    "build:wasm": "bash build.sh",
+    "dev": "npx http-server -c-1 ."
   }
 }
 
