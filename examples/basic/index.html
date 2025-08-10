@@ -109,6 +109,18 @@
             <input type="color" id="voronoiEdgeColor" value="#4169E1">
         </div>
         <div class="control-group">
+            <label>MIC (Thick Edges):</label>
+            <input type="checkbox" id="useMIC">
+        </div>
+        <div class="control-group">
+            <label>Delaunay Width:</label>
+            <input type="number" id="delaunayEdgeWidth" value="2" min="1" max="10" step="1" disabled>
+        </div>
+        <div class="control-group">
+            <label>Voronoi Width:</label>
+            <input type="number" id="voronoiEdgeWidth" value="2" min="1" max="10" step="1" disabled>
+        </div>
+        <div class="control-group">
             <label>Voronoi Method:</label>
             <select id="voronoiMethod">
                 <option value="barycenter" selected>Barycenter</option>
@@ -153,6 +165,10 @@
             <input type="checkbox" id="showBoundary" checked>
         </div>
         <div class="control-group">
+            <label>Show Ghost Cells:</label>
+            <input type="checkbox" id="showGhostCells">
+        </div>
+        <div class="control-group">
             <label>Show Voronoi Faces:</label>
             <input type="checkbox" id="showVoronoiFaces">
         </div>
@@ -166,12 +182,15 @@
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { Line2 } from 'three/addons/lines/Line2.js';
+        import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+        import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
         import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
         import { DelaunayComputation } from '../../src/js/DelaunayComputation.js';
         import PoissonDiskSampling from 'poisson-disk-sampling';
         
         let scene, camera, renderer, controls;
-        let verticesGroup, delaunayGroup, voronoiGroup, tetrahedraGroup, boundaryGroup, voronoiFacesGroup;
+        let verticesGroup, delaunayGroup, voronoiGroup, tetrahedraGroup, boundaryGroup, voronoiFacesGroup, ghostCellsGroup;
         let Module;
         let currentPoints = [];
         let computation = null;
@@ -210,6 +229,7 @@
             tetrahedraGroup = new THREE.Group();
             boundaryGroup = new THREE.Group();
             voronoiFacesGroup = new THREE.Group();
+            ghostCellsGroup = new THREE.Group();
             
             scene.add(verticesGroup);
             scene.add(delaunayGroup);
@@ -217,6 +237,7 @@
             scene.add(tetrahedraGroup);
             scene.add(boundaryGroup);
             scene.add(voronoiFacesGroup);
+            scene.add(ghostCellsGroup);
             
             // Create boundary box
             createBoundaryBox();
@@ -244,6 +265,8 @@
             // Add axes helpers
             const axesHelper = new THREE.AxesHelper(0.2);
             scene.add(axesHelper);
+            // Refresh ghost cell tiling if toggled
+            createGhostCellTiling();
         }
         
         // Generate well-distributed points using Poisson disk sampling
@@ -541,83 +564,42 @@
             let regularEdgeCount = 0;
             
             // --- Draw Delaunay Edges ---
+            const useMIC = document.getElementById('useMIC').checked;
             const delaunayEdgeSet = new Set();
-            for (const tet of computation.tetrahedra) {
-                const edges = [
-                    [tet[0], tet[1]], [tet[0], tet[2]], [tet[0], tet[3]], 
-                    [tet[1], tet[2]], [tet[1], tet[3]], [tet[2], tet[3]]
-                ];
-                for (const [a, b] of edges) {
-                    const key = a < b ? `${a}-${b}` : `${b}-${a}`;
-                    if (!delaunayEdgeSet.has(key)) {
+            const thickDelaunayWidth = parseFloat(document.getElementById('delaunayEdgeWidth').value);
+            const thickVoronoiWidth = parseFloat(document.getElementById('voronoiEdgeWidth').value);
+            if (useMIC) {
+                // Thick edges using MIC
+                const delaunayGeom = new LineGeometry();
+                const delaunayPositions = [];
+                for (const tet of computation.tetrahedra) {
+                    const edges = [[tet[0],tet[1]],[tet[0],tet[2]],[tet[0],tet[3]],[tet[1],tet[2]],[tet[1],tet[3]],[tet[2],tet[3]]];
+                    for (const [a,b] of edges) {
+                        const key = a < b ? `${a}-${b}` : `${b}-${a}`;
+                        if (delaunayEdgeSet.has(key)) continue;
                         delaunayEdgeSet.add(key);
                         const p1 = computation.pointsArray[a];
-                        const p2 = computation.pointsArray[b];
-                        
-                        if (computation.isPeriodic) {
-                            // Calculate the minimum image distance
-                            const p2min = getMinimumImage(p1, p2);
-                            const isPeriodic = (p2min[0] !== p2[0] || p2min[1] !== p2[1] || p2min[2] !== p2[2]);
-                            
-                            if (isPeriodic) {
-                                periodicEdgeCount++;
-                                // Draw periodic edge properly clipped at boundaries
-                                for (let dim = 0; dim < 3; dim++) {
-                                    const diff = p2[dim] - p1[dim];
-                                    if (Math.abs(diff) > 0.5) {
-                                        // This dimension wraps
-                                        const t = diff > 0 ? (1.0 - p1[dim]) / diff : (0.0 - p1[dim]) / diff;
-                                        
-                                        // Clamp t to avoid numerical issues
-                                        const tClamped = Math.max(0.001, Math.min(0.999, t));
-                                        
-                                        const midPoint = [
-                                            p1[0] + tClamped * (p2[0] - p1[0]),
-                                            p1[1] + tClamped * (p2[1] - p1[1]),
-                                            p1[2] + tClamped * (p2[2] - p1[2])
-                                        ];
-                                        
-                                        // Ensure midPoint is exactly at boundary
-                                        midPoint[dim] = diff > 0 ? 0.999 : 0.001;
-                                        
-                                        // Draw first segment to boundary
-                                        const geom1 = new THREE.BufferGeometry().setFromPoints([
-                                            new THREE.Vector3(...p1),
-                                            new THREE.Vector3(...midPoint)
-                                        ]);
-                                        delaunayGroup.add(new THREE.Line(geom1, delaunayPeriodicMaterial));
-                                        
-                                        // Calculate corresponding point on opposite boundary
-                                        const oppositePoint = [...midPoint];
-                                        oppositePoint[dim] = diff > 0 ? 0.001 : 0.999;
-                                        
-                                        // Draw second segment from opposite boundary
-                                        const geom2 = new THREE.BufferGeometry().setFromPoints([
-                                            new THREE.Vector3(...oppositePoint),
-                                            new THREE.Vector3(...p2)
-                                        ]);
-                                        delaunayGroup.add(new THREE.Line(geom2, delaunayPeriodicMaterial));
-                                        
-                                        break; // Only handle the first wrapping dimension
-                                    }
-                                }
-                            } else {
-                                regularEdgeCount++;
-                                // Regular edge within the box
-                                const lineGeom = new THREE.BufferGeometry().setFromPoints([
-                                    new THREE.Vector3(...p1), 
-                                    new THREE.Vector3(...p2)
-                                ]);
-                                delaunayGroup.add(new THREE.Line(lineGeom, delaunayMaterial));
-                            }
-                        } else {
-                            // Regular edge
-                            const lineGeom = new THREE.BufferGeometry().setFromPoints([
-                                new THREE.Vector3(...p1), 
-                                new THREE.Vector3(...p2)
-                            ]);
-                            delaunayGroup.add(new THREE.Line(lineGeom, delaunayMaterial));
-                        }
+                        const p2 = computation.isPeriodic ? getMinimumImage(p1, computation.pointsArray[b]) : computation.pointsArray[b];
+                        delaunayPositions.push(p1[0],p1[1],p1[2], p2[0],p2[1],p2[2]);
+                    }
+                }
+                delaunayGeom.setPositions(delaunayPositions);
+                const delaunayMat = new LineMaterial({ color: delaunayEdgeColorInt, linewidth: thickDelaunayWidth, resolution: new THREE.Vector2(window.innerWidth, window.innerHeight) });
+                const delaunayLine = new Line2(delaunayGeom, delaunayMat);
+                delaunayLine.computeLineDistances();
+                delaunayGroup.add(delaunayLine);
+            } else {
+                // Thin edges (existing path with MIC per-edge)
+                for (const tet of computation.tetrahedra) {
+                    const edges = [[tet[0],tet[1]],[tet[0],tet[2]],[tet[0],tet[3]],[tet[1],tet[2]],[tet[1],tet[3]],[tet[2],tet[3]]];
+                    for (const [a,b] of edges) {
+                        const key = a < b ? `${a}-${b}` : `${b}-${a}`;
+                        if (delaunayEdgeSet.has(key)) continue;
+                        delaunayEdgeSet.add(key);
+                        const p1 = computation.pointsArray[a];
+                        const p2 = computation.isPeriodic ? getMinimumImage(p1, computation.pointsArray[b]) : computation.pointsArray[b];
+                        const lineGeom = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(...p1), new THREE.Vector3(...p2) ]);
+                        delaunayGroup.add(new THREE.Line(lineGeom, delaunayMaterial));
                     }
                 }
             }
@@ -625,17 +607,26 @@
             console.log(`Drew ${periodicEdgeCount} periodic edges out of ${delaunayEdgeSet.size} total Delaunay edges`);
             
             // --- Draw Voronoi Edges ---
-            for (const edge of computation.voronoiEdges) {
-                const p1 = edge.start;
-                const p2 = edge.end;
-                
-                // Use MIC minimum-image convention to avoid cross-box lines
-                const q2 = computation.isPeriodic ? getMinimumImage(p1, p2) : p2;
-                const lineGeom = new THREE.BufferGeometry().setFromPoints([
-                    new THREE.Vector3(...p1), 
-                    new THREE.Vector3(...q2)
-                ]);
-                voronoiGroup.add(new THREE.Line(lineGeom, computation.isPeriodic ? voronoiPeriodicMaterial : voronoiMaterial));
+            if (useMIC) {
+                const vorGeom = new LineGeometry();
+                const positions = [];
+                for (const edge of computation.voronoiEdges) {
+                    const p1 = edge.start;
+                    const p2 = computation.isPeriodic ? getMinimumImage(p1, edge.end) : edge.end;
+                    positions.push(p1[0],p1[1],p1[2], p2[0],p2[1],p2[2]);
+                }
+                vorGeom.setPositions(positions);
+                const vorMat = new LineMaterial({ color: voronoiEdgeColorInt, linewidth: thickVoronoiWidth, resolution: new THREE.Vector2(window.innerWidth, window.innerHeight) });
+                const vorLine = new Line2(vorGeom, vorMat);
+                vorLine.computeLineDistances();
+                voronoiGroup.add(vorLine);
+            } else {
+                for (const edge of computation.voronoiEdges) {
+                    const p1 = edge.start;
+                    const p2 = computation.isPeriodic ? getMinimumImage(p1, edge.end) : edge.end;
+                    const lineGeom = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(...p1), new THREE.Vector3(...p2) ]);
+                    voronoiGroup.add(new THREE.Line(lineGeom, computation.isPeriodic ? voronoiPeriodicMaterial : voronoiMaterial));
+                }
             }
             
             // Draw Voronoi vertices (barycenters or circumcenters)
@@ -861,6 +852,16 @@
             
             document.getElementById('delaunayEdgeColor').addEventListener('change', () => {
                 drawMeshes(computation);
+            });
+            document.getElementById('useMIC').addEventListener('change', (e) => {
+                document.getElementById('delaunayEdgeWidth').disabled = !e.target.checked;
+                document.getElementById('voronoiEdgeWidth').disabled = !e.target.checked;
+                drawMeshes(computation);
+            });
+            document.getElementById('delaunayEdgeWidth').addEventListener('change', () => drawMeshes(computation));
+            document.getElementById('voronoiEdgeWidth').addEventListener('change', () => drawMeshes(computation));
+            document.getElementById('showGhostCells').addEventListener('change', () => {
+                createGhostCellTiling();
             });
             
             document.getElementById('voronoiSize').addEventListener('change', () => {
