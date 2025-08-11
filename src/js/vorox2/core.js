@@ -45,7 +45,27 @@ function circumcenter4(a, b, c, d) {
   const My = [ [A[0][0], rhs[0], A[0][2]], [A[1][0], rhs[1], A[1][2]], [A[2][0], rhs[2], A[2][2]] ];
   const Mz = [ [A[0][0], A[0][1], rhs[0]], [A[1][0], A[1][1], rhs[1]], [A[2][0], A[2][1], rhs[2]] ];
   const x = det3(Mx)/detA, y = det3(My)/detA, z = det3(Mz)/detA;
-  if (![x,y,z].every(Number.isFinite)) return null;
+  
+  // Robustness check: if any component is non-finite, the circumcenter is unstable.
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
+    return null;
+  }
+
+  // --- VALIDATION LOGGING ---
+  // Add a temporary check to see if we are generating huge, unstable centers.
+  if (x < -1 || x > 2 || y < -1 || y > 2 || z < -1 || z > 2) {
+    console.warn(`Unstable circumcenter detected: [${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)}] with determinant ${detA.toExponential(2)}`);
+  }
+  // --- END VALIDATION ---
+
+  // Aggressive stability check: if the center is far outside the typical domain,
+  // it's a sign of a degenerate tetrahedron. Fallback to null.
+  const limit = 10.0; // A circumcenter shouldn't be this far from the origin for a unit cube.
+  if (Math.abs(x) > limit || Math.abs(y) > limit || Math.abs(z) > limit) {
+    console.warn(`Unstable circumcenter detected and rejected: [${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)}]`);
+    return null;
+  }
+
   return [x,y,z];
 }
 
@@ -65,7 +85,7 @@ export function computeCenters(pointsArray, tetrahedra, isPeriodic, method='cent
         const c2 = minImagePoint(ref, p2);
         const d = minImagePoint(ref, p3);
         c = circumcenter4(ref, b, c2, d);
-        if (!c) c = centroid4(ref, b, c2, d);
+        if (!c) c = centroid4(ref, b, c2, d); // Fallback if circumcenter fails
         c = [wrap01(c[0]), wrap01(c[1]), wrap01(c[2])];
       } else {
         c = circumcenter4(p0,p1,p2,p3) || centroid4(p0,p1,p2,p3);

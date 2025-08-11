@@ -1,17 +1,17 @@
-import { minImagePoint, wrap01 } from './core.js';
+import { minImagePoint, wrap01, barycenter } from './core.js';
 
 function vecSub(a,b){ return [a[0]-b[0], a[1]-b[1], a[2]-b[2]]; }
 function vecAdd(a,b){ return [a[0]+b[0], a[1]+b[1], a[2]+b[2]]; }
 function vecScale(a,s){ return [a[0]*s, a[1]*s, a[2]*s]; }
 function vecNorm(a){ return Math.hypot(a[0],a[1],a[2]); }
 
-function homothety(Delta, catchment, scale, energy, equilibration, contractive, expansive) {
-  const n = vecNorm(Delta) || 1e-12;
+function homothety(Δ, catchment, scale, energy, equilibration, contractive, expansive) {
+  const n = vecNorm(Δ) || 1e-12;
   let h = 0.0;
   if (equilibration) h += 1 - (scale / n);
   if (contractive)  h += 1 - (scale / n) * (1 - catchment);
   if (expansive)    h += 1 - (scale / n) * catchment;
-  return vecScale(Delta, energy * h);
+  return vecScale(Δ, energy * h);
 }
 
 export function simplexCatchment(foam, simplexIndex) {
@@ -31,49 +31,42 @@ export function simplexCatchment(foam, simplexIndex) {
   return catchment;
 }
 
-export function gradient(foam, edgeScale, scale, energy, equilibration, contractive, expansive) {
-  const points = foam.points;
-  const tets = foam.simplices;
-  const isPeriodic = foam.isPeriodic;
-  const out = Array.from({length: points.length}, ()=>[0,0,0]);
+export function gradient(foam, edge_scale, scale, energy, equilibration, contractive, expansive) {
+    const grad = Array.from({ length: foam.points.length }, () => [0,0,0]);
+    // Per VoroX.jl, the gradient for point motion is ALWAYS computed from centroids for stability,
+    // even if the foam's flow structure was built with circumcenters.
+    const motion_centers = foam.simplices.map(tet => barycenter(foam.points, tet, foam.isPeriodic));
 
-  for (let si=0; si<tets.length; si++) {
-    const tet = tets[si];
-    const pIdxs = tet;
-    const ps = pIdxs.map(i => points[i]);
-    const catchment = simplexCatchment(foam, si);
+    for (let simplex_idx=0; simplex_idx<foam.simplices.length; simplex_idx++) {
+        const catchment = simplexCatchment(foam, simplex_idx);
+        const p_indices = foam.simplices[simplex_idx];
+        const points = p_indices.map(i => foam.points[i]);
+        const c = motion_centers[simplex_idx];
+        if (!c) continue;
 
-    // centroid of simplex (use MIC to keep close)
-    let c = ps[0];
-    if (isPeriodic) {
-      const b = minImagePoint(c, ps[1]);
-      const d = minImagePoint(c, ps[2]);
-      const e = minImagePoint(c, ps[3]);
-      c = [(c[0]+b[0]+d[0]+e[0])/4, (c[1]+b[1]+d[1]+e[1])/4, (c[2]+b[2]+d[2]+e[2])/4];
-    } else {
-      c = [ (ps[0][0]+ps[1][0]+ps[2][0]+ps[3][0])/4, (ps[0][1]+ps[1][1]+ps[2][1]+ps[3][1])/4, (ps[0][2]+ps[1][2]+ps[2][2]+ps[3][2])/4 ];
-    }
+        for (let i=0; i<p_indices.length; i++) {
+            const p_idx = p_indices[i];
+            const p = points[i];
 
-    for (let a=0; a<4; a++) {
-      const i = pIdxs[a];
-      const p = ps[a];
-      let contrib = [0,0,0];
-      if (edgeScale) {
-        for (let b=0; b<4; b++) if (b!==a) {
-          const q = isPeriodic ? minImagePoint(p, ps[b]) : ps[b];
-          const Delta = vecSub(q, p);
-          contrib = vecAdd(contrib, homothety(Delta, catchment, scale, energy, equilibration, contractive, expansive));
+            if (edge_scale) {
+                for (let b=0; b<4; b++) if (b!==i) {
+                    const q = foam.isPeriodic ? minImagePoint(p, points[b]) : points[b];
+                    const Δ = vecSub(q, p);
+                    const h = homothety(Δ, catchment, scale, energy, equilibration, contractive, expansive);
+                    grad[p_idx][0] += h[0];
+                    grad[p_idx][1] += h[1];
+                    grad[p_idx][2] += h[2];
+                }
+            } else {
+                const Δ = [c[0]-p[0], c[1]-p[1], c[2]-p[2]];
+                const h = homothety(Δ, catchment, scale, energy, equilibration, contractive, expansive);
+                grad[p_idx][0] += h[0];
+                grad[p_idx][1] += h[1];
+                grad[p_idx][2] += h[2];
+            }
         }
-      } else {
-        const q = isPeriodic ? minImagePoint(p, c) : c;
-        const Delta = vecSub(q, p);
-        contrib = vecAdd(contrib, homothety(Delta, catchment, scale, energy, equilibration, contractive, expansive));
-      }
-      out[i] = vecAdd(out[i], contrib);
     }
-  }
-
-  return out;
+    return grad;
 }
 
 export function integratePoints(points, g, dt, isPeriodic, maxDelta=0.02) {

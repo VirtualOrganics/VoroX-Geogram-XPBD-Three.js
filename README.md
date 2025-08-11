@@ -27,22 +27,31 @@ A WebAssembly-powered 3D periodic Delaunay-Voronoi triangulation library for the
 
 [Live Demo](https://virtualorganics.github.io/Geogram-VoroX-Three.js/)
 
-## VoroX Dynamics (experimental)
+## VoroX Dynamics Controls
 
-The demo includes a first pass of VoroX-inspired dynamics on top of the Delaunay/Voronoi structure:
+The "Flow Dynamics" section provides detailed control over the simulation's physics and appearance. These controls are the "brain" of the program, allowing you to explore different dynamic behaviors.
 
-- **Show VoroX Flow**: draws the "active facet" flow as magenta segments between cell centers (centroids or circumcenters, per Voronoi Method).
-- **Color by Knot**: assigns a distinct hue to each detected cycle ("knot"). Non-cyclic facets remain magenta. This uses the computed `facetToKnot[tet][face]` mapping; different knot IDs map to different HSL hues.
-- **Flow Max Segs**: caps the number of rendered flow segments for performance/readability.
-- **Show VoroX Knots**: highlights segments that are part of cycles (knots) using thicker strokes for easy identification.
-- **Knot Width**: controls the stroke width used to highlight knot segments.
-- **Animate Flow**: when enabled (coming next), animates tracers moving along the active flow directions.
-- **Flow Speed**: speed factor for the animated tracers.
+### Core Physics Parameters
 
-Notes
-- Knots are cycles in the directed flow graph; facets on a knot have distance 0 (`knotDist[tet][face] == 0`).
-- Results differ between barycenter and circumcenter methods and with periodic toggling.
-- This is a visualization aid; dynamics (edge/simplex scaling) can be added next.
+*   **Decay**: Controls the "friction" or energy dissipation in the system. A value of `1.0` means no friction (energy is conserved), which can lead to instability. Lower values (e.g., `0.95`) cause the flow energy to dissipate over time, leading to a more stable simulation.
+*   **dt**: The "delta time" or timestep for each frame. It controls how large of a step the simulation takes each frame. Higher values result in faster evolution but can become unstable.
+*   **Energy**: A global multiplier for the strength of all forces acting on the points. Higher values lead to more rapid and dramatic movement.
+*   **Scale**: The target or "ideal" distance the simulation tries to maintain between connected points. This is a key parameter for controlling the final structure of the point set.
+
+### Force Model Toggles
+
+*   **Edge Scale**: (Checkbox) When checked, forces are calculated between every pair of points within each tetrahedron (an edge-based model). When unchecked, forces are calculated between each point and the tetrahedron's stable center (a center-based model). The edge-based model is typically more energetic.
+*   **Equilibration**: (Checkbox) Toggles the primary force that pushes and pulls points to achieve the ideal `Scale` distance.
+*   **Contractive**: (Checkbox) Toggles an additional, gentler force that primarily pulls distant points together.
+*   **Expansive**: (Checkbox) Toggles an additional, gentler force that primarily pushes close points apart.
+
+### Visualization Controls
+
+*   **Max Segs**: A performance and visualization control. It limits the maximum number of flow edges drawn to the screen, preventing the display from becoming too cluttered or slow on complex simulations.
+*   **Flow**: (Checkbox) Toggles the visibility of the VoroX flow edges.
+*   **Knots**: (Checkbox) Toggles the visibility of detected cycles (knots) in the flow. When active, knot edges are highlighted with thicker, black strokes.
+*   **Ghost Cells**: (Checkbox) In periodic mode, this toggles the visibility of the 26 neighboring "ghost" cells, helping to visualize the toroidal, wrapped nature of the space.
+*   **Color by Knot**: (Checkbox) When checked, flow edges belonging to a knot are colored with a unique hue for each distinct knot. When unchecked, all flow edges are colored by their accumulated energy or "strength" (blue for low, red for high).
 
 ## Quick Start
 
