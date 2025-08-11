@@ -29,29 +29,31 @@ A WebAssembly-powered 3D periodic Delaunay-Voronoi triangulation library for the
 
 ## VoroX Dynamics Controls
 
-The "Flow Dynamics" section provides detailed control over the simulation's physics and appearance. These controls are the "brain" of the program, allowing you to explore different dynamic behaviors.
+The "Flow Dynamics" section provides detailed control over the simulation's physics and appearance. These controls are the "brain" of the program, allowing you to explore different dynamic behaviors based on the principles of the VoroX model.
 
 ### Core Physics Parameters
 
-*   **Decay**: Controls the "friction" or energy dissipation in the system. A value of `1.0` means no friction (energy is conserved), which can lead to instability. Lower values (e.g., `0.95`) cause the flow energy to dissipate over time, leading to a more stable simulation.
-*   **dt**: The "delta time" or timestep for each frame. It controls how large of a step the simulation takes each frame. Higher values result in faster evolution but can become unstable.
-*   **Energy**: A global multiplier for the strength of all forces acting on the points. Higher values lead to more rapid and dramatic movement.
-*   **Scale**: The target or "ideal" distance the simulation tries to maintain between connected points. This is a key parameter for controlling the final structure of the point set.
+*   **Decay**: This slider controls the "friction" or energy dissipation in the system. A value of `1.0` means no friction, which allows energy to build up indefinitely and can lead to explosive instability. Lower values (e.g., `0.95`) act like a drag force, causing the accumulated flow energy to fade each frame. This is crucial for allowing the system to shed energy and settle into a stable, dynamic equilibrium.
+*   **dt**: Represents the "delta time" or the size of the integration step for each frame of the simulation. Conceptually, it's how far into the future the simulation jumps in each step. Higher values lead to faster evolution but increase the risk of "overshooting" a stable state and becoming numerically unstable.
+*   **Energy**: A global multiplier for the strength of all calculated forces. You can think of this as the "temperature" or "kinetic energy" of the system. Higher values produce more dramatic and rapid movement, while lower values result in a more gentle relaxation.
+*   **Scale**: This is the target or "ideal" distance that the simulation tries to establish between connected points. This parameter is central to the concept of homothety in the VoroX model, where each tetrahedron attempts to expand or contract its edges to this ideal length, driving the self-organization of the entire structure.
 
 ### Force Model Toggles
 
-*   **Edge Scale**: (Checkbox) When checked, forces are calculated between every pair of points within each tetrahedron (an edge-based model). When unchecked, forces are calculated between each point and the tetrahedron's stable center (a center-based model). The edge-based model is typically more energetic.
-*   **Equilibration**: (Checkbox) Toggles the primary force that pushes and pulls points to achieve the ideal `Scale` distance.
-*   **Contractive**: (Checkbox) Toggles an additional, gentler force that primarily pulls distant points together.
-*   **Expansive**: (Checkbox) Toggles an additional, gentler force that primarily pushes close points apart.
+These toggles control which components of the VoroX force model are active.
+
+*   **Edge Scale**: When checked, forces are calculated between every pair of points within a tetrahedron (an edge-based model), akin to a spring network where every connection has a force. When unchecked, forces are calculated between each point and the tetrahedron's stable center (a center-based model). The edge-based model is more computationally intensive and typically results in a more energetic, "tense" equilibrium.
+*   **Equilibration**: Toggles the main homothety force that pushes and pulls points to achieve the ideal `Scale` distance. This is the primary driver of organization in the simulation.
+*   **Contractive**: Toggles a secondary, asymmetric force that gently pulls points together. Its strength is weighted by the "catchment" area of the flow knots, meaning it has a greater effect on points that are part of larger flow structures.
+*   **Expansive**: Toggles a secondary, asymmetric force that gently pushes points apart, also weighted by the knot catchment area. Using `Contractive` and `Expansive` allows for fine-tuning the clustering or dispersion behavior of the system.
 
 ### Visualization Controls
 
-*   **Max Segs**: A performance and visualization control. It limits the maximum number of flow edges drawn to the screen, preventing the display from becoming too cluttered or slow on complex simulations.
-*   **Flow**: (Checkbox) Toggles the visibility of the VoroX flow edges.
-*   **Knots**: (Checkbox) Toggles the visibility of detected cycles (knots) in the flow. When active, knot edges are highlighted with thicker, black strokes.
-*   **Ghost Cells**: (Checkbox) In periodic mode, this toggles the visibility of the 26 neighboring "ghost" cells, helping to visualize the toroidal, wrapped nature of the space.
-*   **Color by Knot**: (Checkbox) When checked, flow edges belonging to a knot are colored with a unique hue for each distinct knot. When unchecked, all flow edges are colored by their accumulated energy or "strength" (blue for low, red for high).
+*   **Max Segs**: A performance and visualization control. It limits the maximum number of flow edges drawn to the screen to prevent the display from becoming cluttered or slow.
+*   **Flow**: Toggles the visibility of the VoroX flow edges.
+*   **Knots**: Toggles the visibility of detected cycles (knots) in the flow. When active, knot edges are highlighted with thicker, black strokes.
+*   **Ghost Cells**: In periodic mode, this toggles the visibility of the 26 neighboring "ghost" cells, helping to visualize the toroidal, wrapped nature of the space.
+*   **Color by Knot**: When checked, flow edges belonging to a knot are colored with a unique hue for each distinct knot. When unchecked, all flow edges are colored by their accumulated energy (from blue for low energy to red for high energy), providing a visual representation of the energy distribution and dissipation in the system.
 
 ## Quick Start
 

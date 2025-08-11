@@ -38,6 +38,7 @@ export async function createVoroX({ Module, points, periodic=true, centering='ci
   }
   let tetrahedra = triangulate();
   let foam = buildFoam({ pointsArray, tetrahedra, isPeriodic: periodic, centering });
+  let flow = Array.from({length: tetrahedra.length}, ()=>Array(4).fill(0.0)); // Flow accumulator
 
   function step(dt, { edgeScale=true, scale=0.5, energy=5e-4, equilibration=true, contractive=false, expansive=true, recomputeEvery=5 }={}) {
     // Two clocks: fast dynamics each call; topology rebuild every `recomputeEvery` calls
@@ -50,11 +51,14 @@ export async function createVoroX({ Module, points, periodic=true, centering='ci
     }
     // Always refresh centers/flow on current points (using latest or cached tets)
     foam = buildFoam({ pointsArray, tetrahedra, isPeriodic: periodic, centering });
+    return g; // Return the calculated gradient
   }
 
   return {
     step,
     getFoam: () => foam,
+    getFlow: () => flow,
+    setFlow: (f) => { flow = f; },
     getPoints: () => pointsArray,
     setPeriodic: (p)=>{ periodic = !!p; tetrahedra = triangulate(); foam = buildFoam({ pointsArray, tetrahedra, isPeriodic: periodic, centering }); },
   };
