@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test EXACT Approach from Main App</title>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: #222; }
+        #info { position: absolute; top: 10px; left: 10px; color: white; font-family: monospace; font-size: 14px; background: rgba(0,0,0,0.7); padding: 10px; }
+    </style>
+</head>
+<body>
+    <div id="info">
+        Testing EXACT approach from main app<br>
+        Should see: RED, YELLOW, GREEN, CYAN, BLUE, MAGENTA edges<br><br>
+        <label><input type="checkbox" id="forceRainbow" checked> Force Rainbow Colors</label>
+    </div>
+    <script>
+        // Scene setup - EXACTLY like main app
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x333333);
+        
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 100);
+        camera.position.set(2, 2, 3);
+        camera.lookAt(0, 0, 0);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        
+        // Lights - EXACTLY like main app
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.4);
+        dirLight.position.set(1, 1, 1);
+        scene.add(dirLight);
+        
+        // Group for edges - EXACTLY like main app
+        const voronoiGroup = new THREE.Group();
+        scene.add(voronoiGroup);
+        
+        // Function to draw edges - EXACTLY like main app's drawVoronoiAndFlow
+        function drawEdges() {
+            // Clear group
+            voronoiGroup.clear();
+            
+            // Create fake foam data
+            const fakeEdges = [];
+            for (let i = 0; i < 20; i++) {
+                fakeEdges.push({
+                    p1: [Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5],
+                    p2: [Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5],
+                    score: Math.random()  // Random score 0-1
+                });
+            }
+            
+            // Default materials - EXACTLY like main app
+            const defaultVoronoiMaterial = new THREE.LineBasicMaterial({ 
+                color: 0xaaaa00,  // Yellow - like main app
+                linewidth: 2,
+                opacity: 1.0
+            });
+            
+            let coloredCount = 0;
+            
+            // Draw edges - EXACTLY like main app's loop
+            for (const edge of fakeEdges) {
+                const lineGeom = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(...edge.p1),
+                    new THREE.Vector3(...edge.p2)
+                ]);
+                
+                // Determine edge color - EXACTLY like main app
+                let edgeMaterial;
+                const forceRainbow = document.getElementById('forceRainbow').checked;
+                
+                if (forceRainbow) {
+                    // EXACTLY like main app's force rainbow test
+                    const testColors = [0xFF0000, 0xFFFF00, 0x00FF00, 0x00FFFF, 0x0000FF, 0xFF00FF];
+                    const finalColor = testColors[coloredCount % testColors.length];
+                    
+                    edgeMaterial = new THREE.LineBasicMaterial({
+                        color: finalColor,
+                        linewidth: 3,
+                        opacity: 1.0,
+                        transparent: false
+                    });
+                    
+                    console.log(`Edge ${coloredCount}: color=#${finalColor.toString(16).padStart(6, '0').toUpperCase()}`);
+                } else {
+                    // Use score-based color
+                    const t = edge.score;
+                    const hue = t * 0.33;  // 0 = red, 0.33 = green
+                    const color = new THREE.Color();
+                    color.setHSL(hue, 1.0, 0.5);
+                    
+                    edgeMaterial = new THREE.LineBasicMaterial({
+                        color: color.getHex(),
+                        linewidth: 3,
+                        opacity: 1.0,
+                        transparent: false
+                    });
+                }
+                
+                // Add to group - EXACTLY like main app
+                voronoiGroup.add(new THREE.Line(lineGeom, edgeMaterial));
+                coloredCount++;
+            }
+            
+            console.log(`Drew ${coloredCount} edges`);
+        }
+        
+        // Initial draw
+        drawEdges();
+        
+        // Redraw on checkbox change
+        document.getElementById('forceRainbow').addEventListener('change', drawEdges);
+        
+        // Animation
+        function animate() {
+            requestAnimationFrame(animate);
+            voronoiGroup.rotation.y += 0.01;
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>

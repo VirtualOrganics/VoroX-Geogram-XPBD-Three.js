@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Edge Coloring</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        button { padding: 10px; margin: 10px; }
+        #results { margin-top: 20px; }
+        .edge-color { 
+            display: inline-block; 
+            width: 200px; 
+            padding: 5px; 
+            margin: 2px;
+            color: white;
+        }
+    </style>
+    <script src="/dist/periodic_delaunay.js"></script>
+    <script>
+        // Make module available on window for compatibility
+        if (typeof PeriodicDelaunayModule !== 'undefined' && typeof window.PeriodicDelaunayModule === 'undefined') {
+            window.PeriodicDelaunayModule = PeriodicDelaunayModule;
+        }
+    </script>
+</head>
+<body>
+    <h1>Test Edge Coloring System</h1>
+    <button onclick="testColoring()">Test Edge Coloring</button>
+    <div id="results"></div>
+
+    <script type="module">
+        import { createVoroX } from '/src/js/VoroXAdapter.js';
+        import { calculateEdgeScores } from '/src/js/vorox2/dynamics.js';
+        
+        // Copy the color function from main app
+        function edgeScoreToColor(score) {
+            // Map score (0 to 1) to color gradient:
+            // 0.0 = Red (#ff0000)
+            // 0.5 = Yellow (#ffff00)  
+            // 1.0 = Green (#00ff00)
+            
+            // Clamp score to [0,1]
+            score = Math.max(0, Math.min(1, score));
+            
+            let r, g, b;
+            if (score < 0.5) {
+                // Red to Yellow (0.0 to 0.5)
+                const t = score * 2; // 0 to 1
+                r = 255;
+                g = Math.floor(255 * t);
+                b = 0;
+            } else {
+                // Yellow to Green (0.5 to 1.0)
+                const t = (score - 0.5) * 2; // 0 to 1
+                r = Math.floor(255 * (1 - t));
+                g = 255;
+                b = 0;
+            }
+            
+            // Convert to hex
+            const toHex = (n) => n.toString(16).padStart(2, '0');
+            return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+        }
+        
+        window.testColoring = async function() {
+            const results = document.getElementById('results');
+            results.innerHTML = '<p>Loading...</p>';
+            
+            try {
+                // Wait for module to be available
+                let attempts = 0;
+                while (typeof PeriodicDelaunayModule === 'undefined' && attempts < 10) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    attempts++;
+                }
+                
+                if (typeof PeriodicDelaunayModule === 'undefined') {
+                    throw new Error('PeriodicDelaunayModule not loaded. Refresh the page.');
+                }
+                
+                const Module = await PeriodicDelaunayModule();
+                
+                // Generate fewer points for clearer results
+                const N = 20;
+                const points = [];
+                
+                // Create a slightly irregular distribution
+                for (let i = 0; i < N; i++) {
+                    const angle = (i / N) * Math.PI * 2;
+                    const radius = 0.3 + Math.random() * 0.2;
+                    points.push([
+                        0.5 + radius * Math.cos(angle),
+                        0.5 + radius * Math.sin(angle),
+                        Math.random()
+                    ]);
+                }
+                
+                // Create VoroX instance
+                const vorox = await createVoroX({
+                    Module,
+                    points,
+                    periodic: true,
+                    centering: true
+                });
+                
+                // Get foam
+                const foam = vorox.getFoam();
+                
+                // Compute edge scores with high depth
+                const edgeResult = calculateEdgeScores(foam, 20, 0.85);
+                const scores = edgeResult.scores;
+                
+                let html = '<h2>Results</h2>';
+                html += `<p>Total edges: ${foam.voronoiEdges.length}</p>`;
+                html += `<p>Total scores: ${scores.size}</p>`;
+                
+                // Get score statistics
+                const values = Array.from(scores.values());
+                const min = Math.min(...values);
+                const max = Math.max(...values);
+                const avg = values.reduce((a,b) => a+b, 0) / values.length;
+                
+                html += `<p>Score range: ${min.toFixed(4)} to ${max.toFixed(4)} (avg: ${avg.toFixed(4)})</p>`;
+                
+                // Test color mapping
+                html += '<h3>Color Mapping Test</h3>';
+                const testScores = [0, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0];
+                for (const testScore of testScores) {
+                    const color = edgeScoreToColor(testScore);
+                    html += `<div class="edge-color" style="background: ${color}">Score: ${testScore} → ${color}</div><br>`;
+                }
+                
+                // Show actual edge colors
+                html += '<h3>Actual Edge Colors (first 10)</h3>';
+                let edgeCount = 0;
+                for (const [key, score] of scores) {
+                    if (edgeCount >= 10) break;
+                    const color = edgeScoreToColor(score);
+                    html += `<div class="edge-color" style="background: ${color}">Edge ${key}: ${score.toFixed(4)}</div><br>`;
+                    edgeCount++;
+                }
+                
+                // Check for matching
+                html += '<h3>Edge Key Matching</h3>';
+                let matches = 0;
+                for (const edge of foam.voronoiEdges) {
+                    const key = `${Math.min(edge[0], edge[1])}-${Math.max(edge[0], edge[1])}`;
+                    if (scores.has(key)) matches++;
+                }
+                html += `<p>Edges with scores: ${matches} / ${foam.voronoiEdges.length}</p>`;
+                
+                if (matches === foam.voronoiEdges.length) {
+                    html += '<p style="color: green">✅ All edges have scores!</p>';
+                } else {
+                    html += '<p style="color: red">❌ Some edges missing scores!</p>';
+                }
+                
+                results.innerHTML = html;
+                
+            } catch (error) {
+                results.innerHTML = '<p style="color: red">Error: ' + error.toString() + '</p><pre>' + error.stack + '</pre>';
+            }
+        };
+    </script>
+</body>
+</html>

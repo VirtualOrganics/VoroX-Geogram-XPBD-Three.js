@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Module Loading</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .success { color: green; }
+        .error { color: red; }
+        button { padding: 10px; margin: 10px; }
+    </style>
+    <script src="/dist/periodic_delaunay.js"></script>
+    <script>
+        // Make module available on window for compatibility
+        if (typeof PeriodicDelaunayModule !== 'undefined' && typeof window.PeriodicDelaunayModule === 'undefined') {
+            window.PeriodicDelaunayModule = PeriodicDelaunayModule;
+        }
+    </script>
+</head>
+<body>
+    <h1>Test Module Loading</h1>
+    <button onclick="testModule()">Test Module</button>
+    <button onclick="testDelayed()">Test Delayed (wait 1s)</button>
+    <div id="results"></div>
+
+    <script>
+        function testModule() {
+            const results = document.getElementById('results');
+            let html = '<h3>Immediate Test</h3>';
+            
+            // Check global scope
+            if (typeof PeriodicDelaunayModule === 'undefined') {
+                html += '<p class="error">❌ PeriodicDelaunayModule is undefined</p>';
+                html += '<p>Checking window.PeriodicDelaunayModule: ' + typeof window.PeriodicDelaunayModule + '</p>';
+            } else if (typeof PeriodicDelaunayModule !== 'function') {
+                html += '<p class="error">❌ PeriodicDelaunayModule is not a function: ' + typeof PeriodicDelaunayModule + '</p>';
+            } else {
+                html += '<p class="success">✅ PeriodicDelaunayModule is a function</p>';
+                
+                // Try to call it
+                try {
+                    PeriodicDelaunayModule().then(module => {
+                        html += '<p class="success">✅ Module loaded successfully</p>';
+                        html += '<p>Module type: ' + typeof module + '</p>';
+                        html += '<p>Has compute_delaunay: ' + (typeof module.compute_delaunay !== 'undefined') + '</p>';
+                        results.innerHTML = html;
+                    }).catch(err => {
+                        html += '<p class="error">❌ Error loading module: ' + err + '</p>';
+                        results.innerHTML = html;
+                    });
+                } catch (err) {
+                    html += '<p class="error">❌ Error calling PeriodicDelaunayModule: ' + err + '</p>';
+                }
+            }
+            
+            results.innerHTML = html;
+        }
+        
+        async function testDelayed() {
+            const results = document.getElementById('results');
+            results.innerHTML = '<h3>Delayed Test (waiting 1 second)</h3><p>Waiting...</p>';
+            
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            testModule();
+        }
+        
+        // Test on page load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                console.log('Page loaded. Testing module availability...');
+                console.log('PeriodicDelaunayModule:', typeof PeriodicDelaunayModule !== 'undefined' ? PeriodicDelaunayModule : 'undefined');
+                console.log('Type:', typeof PeriodicDelaunayModule);
+                
+                // Make it globally accessible if it exists
+                if (typeof PeriodicDelaunayModule !== 'undefined') {
+                    window.PeriodicDelaunayModule = PeriodicDelaunayModule;
+                    console.log('Module made available as window.PeriodicDelaunayModule');
+                }
+            }, 100);
+        });
+    </script>
+</body>
+</html>

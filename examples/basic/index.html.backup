@@ -203,79 +203,14 @@
         <!-- PageRank Edge Coloring System -->
         <hr>
         <div class="section-header" style="background: linear-gradient(90deg, #ff0000, #ffff00, #00ff00); color: black;">🎨 Edge Coloring System</div>
-        <div class="control-group">
-            <div style="margin-bottom:6px; font-weight:600">Scoring Mode</div>
-            <div class="inline-pair" title="Stationary PageRank over obtuse-edge graph">
-                <input type="radio" name="scoreMode" id="scoreModePR" checked>
-                <label for="scoreModePR">PageRank (stationary)</label>
-            </div>
-            <div class="inline-pair" title="Time-bounded directional random walks">
-                <input type="radio" name="scoreMode" id="scoreModeMC">
-                <label for="scoreModeMC">MC Walk (time‑bounded)</label>
-            </div>
-        </div>
-        <div class="control-group" id="mcParamsBlock" style="display:none">
-            <div style="margin:4px 0 8px; opacity:0.8">MC Parameters</div>
-            <div class="row-2" title="Walk horizon (number of steps). Larger explores farther, slower.">
-                <label for="mcStepsL">Max Steps (L)</label>
-                <input type="number" id="mcStepsL" min="2" max="32" step="1" value="12">
-            </div>
-            <div class="row-2" title="Number of walkers per start. Higher = smoother colors.">
-                <label for="mcWalkersK">Walkers per half‑edge (K)</label>
-                <input type="number" id="mcWalkersK" min="8" max="256" step="8" value="64">
-            </div>
-            <div class="row-2" title="Discount per step. Lower emphasizes near field.">
-                <label for="mcAlpha">Per‑step survival (α)</label>
-                <input type="number" id="mcAlpha" min="0.75" max="0.98" step="0.01" value="0.90">
-            </div>
-            <div class="inline-pair" title="Recompute immediately when parameters change (optional)">
-                <input type="checkbox" id="mcAutoRecompute">
-                <label for="mcAutoRecompute">Auto‑recompute on change</label>
-            </div>
-        </div>
-        <div class="control-group" id="prParamsBlock">
-            <div class="row-2" title="Search depth for PageRank iterations">
-                <label for="dynSearchDepthNum">PageRank Depth</label>
-                <input type="number" id="dynSearchDepthNum" min="5" max="30" step="1" value="15">
-            </div>
-        </div>
         <div class="control-group row-2">
             <div class="inline-pair" title="Color Voronoi edges by PageRank score"><input type="checkbox" id="colorEdgesByScore"><label>Color Edges by Score</label></div>
             <div class="inline-pair" title="Show edge statistics in status bar"><input type="checkbox" id="showEdgeStats"><label>Show Edge Stats</label></div>
         </div>
-        <!-- Discrete color mapping controls -->
-        <div class="control-group" id="colorMapControls">
-            <div class="row-2">
-                <label for="colorSteps" title="Number of discrete color steps">Color steps</label>
-                <input type="number" id="colorSteps" min="2" max="10" step="1" value="5">
-            </div>
-            <div class="row-2">
-                <label for="colorPalette" title="Choose color palette">Palette</label>
-                <select id="colorPalette">
-                    <option value="seq_ryg">Sequential (Red→Yellow→Green)</option>
-                    <option value="div_bwr">Diverging (Blue→White→Red)</option>
-                    <option value="viridis">Viridis (CB‑safe)</option>
-                    <option value="cividis">Cividis (CB‑safe)</option>
-                    <option value="turbo">Turbo</option>
-                </select>
-            </div>
-            <div class="row-2">
-                <label for="quantization" title="Equal bins or quantiles">Quantization</label>
-                <select id="quantization">
-                    <option value="equal">Equal bins</option>
-                    <option value="quantile">Quantiles</option>
-                </select>
-            </div>
-            <div class="inline-pair" title="Reverse the palette order">
-                <input type="checkbox" id="reversePalette">
-                <label for="reversePalette">Reverse palette</label>
-            </div>
-            <div id="colorLegend" style="margin-top:6px; display:flex; gap:4px; align-items:center;"></div>
-        </div>
         <div class="control-group row-2">
             <div class="inline-pair" title="Force rainbow colors to test if Three.js rendering works"><input type="checkbox" id="forceRainbowTest"><label>🌈 Force Rainbow Test</label></div>
         </div>
-         <div class="control-group">
+        <div class="control-group">
             <button id="computeEdgeScoresBtn" title="Manually compute edge PageRank scores">Compute Edge Scores</button>
             <button id="quickColorBtn" title="Quick setup for colored edges" style="background: linear-gradient(90deg, #ff0000, #ffff00, #00ff00); color: black;">🌈 Quick Color Demo</button>
         </div>
@@ -290,37 +225,15 @@
          <div class="control-group">
             <div class="inline-pair" title="Show periodic ghost cells"><input type="checkbox" id="showGhostCells"><label>Ghost Cells</label></div>
         </div>
-        <!-- Make VoroX flow toggle visible to control yellow network -->
-        <div class="control-group">
-            <div class="inline-pair" title="Show VoroX flow (yellow line network)"><input type="checkbox" id="showVoroX"><label>Flow (VoroX)</label></div>
-        </div>
         
-        <!-- Previously hidden: now visible controls that affect rendering/flow -->
-        <div class="control-group" title="Legacy/flow settings that still affect visuals">
-            <div class="row-2">
-                <label for="dynDecay">Decay:</label>
-                <input type="range" id="dynDecay" min="0.8" max="1.0" step="0.005" value="0.95">
-            </div>
-            <div class="row-2">
-                <label for="dynDecayNum">Decay (num):</label>
-                <input type="number" id="dynDecayNum" min="0.8" max="1.0" step="0.005" value="0.95">
-            </div>
-            <div class="row-2">
-                <label for="voroxMaxSegs">Flow Segments:</label>
-                <input type="range" id="voroxMaxSegs" min="100" max="50000" step="100" value="2000">
-            </div>
-            <div class="row-2">
-                <label for="voroxMaxSegsNum">Flow Segments (num):</label>
-                <input type="number" id="voroxMaxSegsNum" min="100" max="20000" step="100" value="2000">
-            </div>
-            <div class="inline-pair" title="Color faces by score (overrides face color picker)">
-                <input type="checkbox" id="voroxColorByScore" checked>
-                <label for="voroxColorByScore">Faces: Color by Score</label>
-            </div>
-            <div class="inline-pair" title="Color flow (VoroX) by score; if off, uses Voronoi Edge Color picker">
-                <input type="checkbox" id="flowColorByScore" checked>
-                <label for="flowColorByScore">Flow: Color by Score</label>
-            </div>
+        <!-- Hidden Legacy Controls (keeping for compatibility but not showing) -->
+        <div style="display: none;">
+            <input type="range" id="dynDecay" min="0.8" max="1.0" step="0.005" value="0.95">
+            <input type="number" id="dynDecayNum" min="0.8" max="1.0" step="0.005" value="0.95">
+            <input type="range" id="voroxMaxSegs" min="100" max="20000" step="100" value="2000">
+            <input type="number" id="voroxMaxSegsNum" min="100" max="20000" step="100" value="2000">
+            <input type="checkbox" id="showVoroX" checked>
+            <input type="checkbox" id="voroxColorByScore" checked>
         </div>
         <hr>
         <div class="section-header">Delaunay Triangles / Tetrahedra</div>
@@ -382,16 +295,10 @@
                 <input type="color" id="voronoiVertexColor" value="#0000FF">
             </div>
         </div>
-        <!-- Previously hidden: Voronoi edge styling (used when not coloring by score) -->
-        <div class="control-group row-2" title="Voronoi edge styling (ignored when Color Edges by Score is on)">
-            <div>
-                <label>Edge Width:</label>
-                <input type="number" id="voronoiEdgeWidth" value="2" min="1" max="10" step="1">
-            </div>
-            <div>
-                <label>Edge Color:</label>
-                <input type="color" id="voronoiEdgeColor" value="#4169E1">
-            </div>
+        <!-- Edge controls removed - using PageRank coloring system instead -->
+        <div style="display: none;">
+            <input type="number" id="voronoiEdgeWidth" value="2">
+            <input type="color" id="voronoiEdgeColor" value="#4169E1">
         </div>
         <!-- Move Tetra controls to Delaunay section and place Voronoi Method later -->
         <div class="control-group">
@@ -433,7 +340,7 @@
         import { DelaunayComputation } from '../../src/js/DelaunayComputation.js';
         import { createVoroX } from '../../src/js/VoroXAdapter.js';
         import { barycenter } from '../../src/js/vorox2/core.js';
-        import { calculateScores, calculateEdgeScores, calculateEdgeScoresMonteCarlo, gradient, integratePoints, createVerletSystem } from '../../src/js/vorox2/dynamics.js';
+        import { calculateScores, calculateEdgeScores, gradient, integratePoints, createVerletSystem } from '../../src/js/vorox2/dynamics.js';
         import PoissonDiskSampling from "https://esm.sh/poisson-disk-sampling@2.3.0";
         
         let scene, camera, renderer, controls;
@@ -447,19 +354,7 @@
         let lastFPSUpdate = performance.now();
         let scores = [];
         let verletIntegrator = null;  // Verlet physics integrator
-        let lastEdgeScores = null;    // Cached edge scores (PR or MC)
-        let lastScoreMethod = null;   // 'pagerank' | 'mc'
-        let lastScoreParams = null;   // params used for last compute
-        let lastScoreTimestamp = null;// Date.now()
-        let lastFoamHash = null;      // topology hash to avoid stale reuse
-        // Discrete color mapping cache/state
-        let colorSteps = 5;
-        let paletteId = 'seq_ryg';
-        let quantization = 'equal';
-        let reversePalette = false;
-        let cachedThresholds = null;
-        let cachedStepColors = null;
-        let cachedScoreHash = null;
+        let lastEdgeScores = null;    // Cached edge PageRank scores
 
         function setStatus(message, isSuccess = true) {
             const statusEl = document.getElementById('status');
@@ -846,8 +741,7 @@
             const showVoronoiEdges = document.getElementById('showVoronoiEdgesToggle').checked;
             const showVoronoiFaces = document.getElementById('showVoronoiFaces').checked;
             const showFlow = document.getElementById('showVoroX').checked;
-            const facesColorByScore = document.getElementById('voroxColorByScore').checked;
-            const flowColorByScore = document.getElementById('flowColorByScore').checked;
+            const colorByScore = document.getElementById('voroxColorByScore').checked;
             const colorEdgesByScore = document.getElementById('colorEdgesByScore').checked;
             const showEdgeStats = document.getElementById('showEdgeStats').checked;
 
@@ -863,7 +757,7 @@
             const vizCenters = foam.simplices.map(tet => barycenter(foam.points, tet, foam.isPeriodic));
 
             let maxScore = 0;
-            if (facesColorByScore && scores.length > 0) {
+            if (colorByScore && scores.length > 0) {
                 for(const s of scores) maxScore = Math.max(maxScore, s);
             }
             function scoreToColor(s) {
@@ -877,67 +771,17 @@
             }
             
             // Function to color edges based on their PageRank score
-            function getPaletteAnchors(id){
-                switch(id){
-                    case 'div_bwr': return ['#313695','#FFFFFF','#A50026'];
-                    case 'viridis': return ['#440154','#414487','#2A788E','#22A884','#7AD151','#FDE725'];
-                    case 'cividis': return ['#00204C','#2E4A7D','#4B6B8A','#6C8C89','#94AB73','#D3C95A','#FDE945'];
-                    case 'turbo': return ['#30123B','#4145AD','#2CA8F7','#39D353','#EEF921','#F98E09','#C01A1B'];
-                    case 'seq_ryg':
-                    default: return ['#FF0000','#FFFF00','#00FF00'];
-                }
-            }
-            function lerpColor(c1,c2,t){
-                const a=new THREE.Color(c1),b=new THREE.Color(c2),out=new THREE.Color();
-                out.r=a.r+(b.r-a.r)*t; out.g=a.g+(b.g-a.g)*t; out.b=a.b+(b.b-a.b)*t; return out;
-            }
-            function buildStepColors(steps, id, reverse){
-                const anchors=getPaletteAnchors(id);
-                const m=anchors.length-1;
-                const arr=[];
-                for(let i=0;i<steps;i++){
-                    const u=steps===1?0:i/(steps-1);
-                    const x=u*m, k=Math.min(m-1, Math.floor(x));
-                    const t=x-k; arr.push(lerpColor(anchors[k], anchors[k+1], t));
-                }
-                if(reverse) arr.reverse();
-                return arr;
-            }
-            function binarySearchThresholds(th, s){
-                let lo=0, hi=th.length; while(lo<hi){const mid=(lo+hi>>>1); if(s<th[mid]) hi=mid; else lo=mid+1;} return lo;
-            }
-            function hashScores(map){
-                if(!map||map.size===0) return '0';
-                let h=0; let i=0;
-                for(const v of map.values()){ const x=Math.floor(v*1000); h=(h*1315423911 ^ x)>>>0; if(++i>2048) break; }
-                return String(h>>>0);
-            }
-            function ensureColorMappingCache(){
-                if(!lastEdgeScores||lastEdgeScores.size===0) { cachedThresholds=null; cachedStepColors=null; cachedScoreHash=null; return; }
-                const scoreHash=hashScores(lastEdgeScores);
-                if(cachedThresholds && cachedStepColors && cachedScoreHash===`${paletteId}|${colorSteps}|${quantization}|${reversePalette}|${scoreHash}`) return;
-                // thresholds
-                let th=null;
-                if(quantization==='quantile'){
-                    const vals=Array.from(lastEdgeScores.values()).slice().sort((a,b)=>a-b);
-                    th=[]; for(let i=1;i<colorSteps;i++){ const p=i/colorSteps; const idx=Math.min(vals.length-1, Math.max(0, Math.floor(p*(vals.length-1)))); th.push(vals[idx]); }
-                } else {
-                    th=[]; for(let i=1;i<colorSteps;i++){ th.push(i/colorSteps); }
-                }
-                cachedThresholds=th;
-                cachedStepColors=buildStepColors(colorSteps, paletteId, reversePalette);
-                cachedScoreHash=`${paletteId}|${colorSteps}|${quantization}|${reversePalette}|${scoreHash}`;
-                // update legend
-                const legend=document.getElementById('colorLegend'); if(legend){ legend.innerHTML=''; const total=colorSteps; for(let i=0;i<total;i++){ const sw=document.createElement('div'); sw.style.cssText='width:18px;height:12px;border:1px solid #888'; sw.style.background=`#${cachedStepColors[i].getHexString()}`; legend.appendChild(sw);} }
-            }
             function edgeScoreToColor(score) {
-                const s=Math.max(0, Math.min(1, score||0));
-                ensureColorMappingCache();
-                if(!cachedStepColors){ const c=new THREE.Color(); c.setHSL(s*0.33,1.0,0.5); return c; }
-                let bin=0;
-                if(quantization==='quantile' && cachedThresholds){ bin=binarySearchThresholds(cachedThresholds, s); }
-                else { bin=Math.floor(s*colorSteps - 1e-8); if(bin<0) bin=0; if(bin>=colorSteps) bin=colorSteps-1; }
-                return cachedStepColors[bin].clone();
+                // Red (low score) -> Yellow -> Green (high score)
+                // Clamp score to [0,1]
+                const t = Math.max(0, Math.min(1, score));
+                
+                // Use HSL: Hue from 0 (red) through 0.17 (yellow) to 0.33 (green)
+                // Higher saturation and moderate lightness for visibility
+                const hue = t * 0.33;  // 0 = red, 0.17 = yellow, 0.33 = green
+                const c = new THREE.Color();
+                c.setHSL(hue, 1.0, 0.5);  // Full saturation, medium lightness
+                return c;
             }
 
             if (showVoronoiFaces) {
@@ -967,7 +811,7 @@
                         return out;
                     });
                     const geom = new ConvexGeometry(adjusted);
-                const color = facesColorByScore ? scoreToColor(scores[cellData[0].tetId]) : new THREE.Color(faceColorHex);
+                    const color = colorByScore ? scoreToColor(scores[cellData[0].tetId]) : new THREE.Color(faceColorHex);
                     const mat = new THREE.MeshPhongMaterial({ color, opacity: faceOpacity, transparent: true, side: THREE.DoubleSide, depthWrite: false });
                     voronoiFacesGroup.add(new THREE.Mesh(geom, mat));
                 });
@@ -994,15 +838,10 @@
                         if (!c1 || !c2_raw) continue;
 
                         const c2 = (foam.isPeriodic && useMIC) ? getMinimumImage(c1, c2_raw) : c2_raw;
-                        let color;
-                        if (flowColorByScore) {
-                            const edgeKey = t1_idx < t2_idx ? `${t1_idx}-${t2_idx}` : `${t2_idx}-${t1_idx}`;
-                            const prScore = lastEdgeScores && lastEdgeScores.get ? lastEdgeScores.get(edgeKey) : undefined;
-                            color = (prScore !== undefined) ? edgeScoreToColor(prScore)
-                                : new THREE.Color(document.getElementById('voronoiEdgeColor').value || '#ff00aa');
-                        } else {
-                            color = new THREE.Color(document.getElementById('voronoiEdgeColor').value || '#ff00aa');
-                        }
+                        const score1 = scores[t1_idx] || 0;
+                        const score2 = scores[t2_idx] || 0;
+                        const avgScore = (score1 + score2) / 2;
+                        const color = colorByScore ? scoreToColor(avgScore) : new THREE.Color(0xff00aa);
                         const mat = new THREE.LineBasicMaterial({ color, opacity: 0.95, transparent: true });
                         const g = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(...c1), new THREE.Vector3(...c2) ]);
                         voroxGroup.add(new THREE.Line(g, mat));
@@ -1030,9 +869,7 @@
             }
         }
         
-        // OLD FUNCTION - NOT USED ANYMORE - Kept for reference only
-        // Visualize Voronoi edges
-        function drawVoronoi_OLD_UNUSED(computation) {
+
             voronoiGroup.clear();
             
             if (computation.voronoiEdges.length === 0) return;
@@ -1082,8 +919,7 @@
             }
         }
         
-        // OLD FUNCTION - NOT USED ANYMORE 
-        function drawVoronoiFaces_OLD_UNUSED(computation) {
+
             voronoiFacesGroup.clear();
             
             // Support faces for both barycenter and circumcenter methods; limit point count for perf
@@ -1150,8 +986,7 @@
             console.log(`Built ${built} Voronoi cell meshes`);
         }
         
-        // OLD FUNCTION - NOT USED ANYMORE
-        function drawMeshes_OLD_UNUSED(computation) {
+
             delaunayGroup.clear();
             voronoiGroup.clear();
             voronoiFacesGroup.clear();
@@ -1239,9 +1074,9 @@
                         if (computation.isPeriodic) {
                             c2 = getMinimumImage(c1, c2);
                         }
-                        // Knot-based coloring removed; always use picker or score elsewhere
-                        // Use Voronoi Edge color picker when not score-colored; PR-based color handled in the other flow block
-                        const col = new THREE.Color(document.getElementById('voronoiEdgeColor').value || '#ff00aa');
+                        const col = colorByKnot && flow.facetToKnot[ti][fi] > 0
+                            ? new THREE.Color().setHSL((flow.facetToKnot[ti][fi] * 0.1375) % 1, 0.85, 0.5)
+                            : new THREE.Color(0xff00aa);
                         const mat = new THREE.LineBasicMaterial({ color: col.getHex(), opacity: 0.9, transparent: true });
                         const g = new THREE.BufferGeometry().setFromPoints([
                             new THREE.Vector3(...c1), new THREE.Vector3(...c2)
@@ -1251,7 +1086,27 @@
                     }
                 }
 
-                // Knot highlighting removed
+                // Highlight knots (cycles) if enabled
+                if (document.getElementById('showGhostCells').checked && flow.knots.length) {
+                    const baseWidth = parseFloat(document.getElementById('voroxKnotWidth').value);
+                    for (const knot of flow.knots) {
+                        for (let i = 0; i < knot.length; i++) {
+                            const a = knot[i];
+                            const b = flow.activeEdges[a.tet][a.face];
+                            if (!b) continue;
+                            let c1 = centers[a.tet];
+                            let c2 = centers[b.tet];
+                            if (computation.isPeriodic) {
+                                c2 = getMinimumImage(c1, c2);
+                            }
+                            const mat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: baseWidth, opacity: 1.0 });
+                            const g = new THREE.BufferGeometry().setFromPoints([
+                                new THREE.Vector3(...c1), new THREE.Vector3(...c2)
+                            ]);
+                            voroxGroup.add(new THREE.Line(g, mat));
+                        }
+                    }
+                }
                 // Initialize tracers if animation is on
                 if (document.getElementById('animateVoroXFlow').checked) {
                     initVoroxTracers(flow, centers);
@@ -1306,8 +1161,7 @@
             }
         }
         
-        // OLD FUNCTION - NOT USED ANYMORE
-        function drawVoroX2_OLD_UNUSED(foam) {
+
             voronoiGroup.clear();
             voronoiFacesGroup.clear();
             voroxGroup.clear();
@@ -1387,9 +1241,6 @@
                     console.log('Sample scores:', sampleScores.map(s => s.toFixed(4)).join(', '));
                 } else {
                     console.log('❌ Edge coloring DISABLED or no scores available');
-                    if (colorEdgesByScore) {
-                        setStatus('No edge scores available—compute scores first.', false);
-                    }
                 }
                 
                 for (const edgePair of foam.voronoiEdges) {
@@ -1478,18 +1329,11 @@
                 voronoiGroup.add(new THREE.Line(lineGeom, edgeMaterial));
                 }
                 
-                // Display coloring summary and fallback diagnostics
+                // Display coloring summary
                 if (colorEdgesByScore && lastEdgeScores) {
                     console.log(`Edge coloring complete: ${coloredCount} colored, ${defaultCount} default`);
-                    const total = coloredCount + defaultCount;
                     if (coloredCount === 0) {
                         console.error('WARNING: No edges were colored! Check edge key matching.');
-                    }
-                    if (total > 0) {
-                        const fallbackPct = (defaultCount / total) * 100;
-                        if (fallbackPct > 5) {
-                            setStatus(`Some edges lacked scores (${fallbackPct.toFixed(1)}%). Check L/α (MC) or depth (PR).`, false);
-                        }
                     }
                 }
                 
@@ -1573,8 +1417,9 @@
                         if (foam.isPeriodic) {
                             c2 = getMinimumImage(c1, c2);
                         }
-                        // Knot-based coloring removed; always use picker or score elsewhere
-                        const col = new THREE.Color(document.getElementById('voronoiEdgeColor').value || '#ff00aa');
+                        const col = colorByKnot && flow.facetToKnot[ti][fi] > 0
+                            ? new THREE.Color().setHSL((flow.facetToKnot[ti][fi] * 0.1375) % 1, 0.85, 0.5)
+                            : new THREE.Color(0xff00aa);
                         const mat = new THREE.LineBasicMaterial({ color: col.getHex(), opacity: 0.9, transparent: true });
                         const g = new THREE.BufferGeometry().setFromPoints([
                             new THREE.Vector3(...c1), new THREE.Vector3(...c2)
@@ -1584,7 +1429,27 @@
                     }
                 }
 
-                // Knot highlighting removed
+                // Highlight knots (cycles) if enabled
+                if (document.getElementById('showGhostCells').checked && flow.knots.length) {
+                    const baseWidth = parseFloat(document.getElementById('voroxKnotWidth').value);
+                    for (const knot of flow.knots) {
+                        for (let i = 0; i < knot.length; i++) {
+                            const a = knot[i];
+                            const b = flow.activeEdges[a.tet][a.face];
+                            if (!b) continue;
+                            let c1 = centers[a.tet];
+                            let c2 = centers[b.tet];
+                            if (foam.isPeriodic) {
+                                c2 = getMinimumImage(c1, c2);
+                            }
+                            const mat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: baseWidth, opacity: 1.0 });
+                            const g = new THREE.BufferGeometry().setFromPoints([
+                                new THREE.Vector3(...c1), new THREE.Vector3(...c2)
+                            ]);
+                            voroxGroup.add(new THREE.Line(g, mat));
+                        }
+                    }
+                }
                 // Initialize tracers if animation is on
                 if (document.getElementById('animateVoroXFlow').checked) {
                     initVoroxTracers(flow, centers);
@@ -1768,94 +1633,16 @@
             document.getElementById('stepBtn').addEventListener('click', () => step());
             
             // Manual edge score computation button
-            // Simple overlay for long-running computes
-            let overlayEl = document.getElementById('computeOverlay');
-            if (!overlayEl) {
-                overlayEl = document.createElement('div');
-                overlayEl.id = 'computeOverlay';
-                overlayEl.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.35);color:#fff;display:none;align-items:center;justify-content:center;z-index:9999;font:14px/1.4 system-ui;';
-                overlayEl.innerHTML = '<div style="background:#222;padding:12px 16px;border-radius:6px;">Computing edge scores… <span class="spinner" style="display:inline-block;width:12px;height:12px;border:2px solid #999;border-top-color:#fff;border-radius:50%;margin-left:8px;animation:spin 0.8s linear infinite;"></span></div>';
-                const style = document.createElement('style');
-                style.textContent = '@keyframes spin{to{transform:rotate(360deg)}}';
-                document.head.appendChild(style);
-                document.body.appendChild(overlayEl);
-            }
-
-            // Cache helpers
-            function crc32(str){let c=~0;for(let i=0;i<str.length;i++){c=(c>>>8)^table[(c^str.charCodeAt(i))&0xff]}return ~c>>>0}const table=new Uint32Array(256).map((_,n)=>{let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;return c});
-            function buildFoamHash(foam){
-                const periodic = foam.isPeriodic ? 1 : 0;
-                const centering = (document.getElementById('voronoiMethod')?.value || 'circumcenter');
-                const np = foam.points.length;
-                const nt = foam.simplices.length;
-                const ve = foam.voronoiEdges?.length || 0;
-                const keys = [];
-                if (foam.voronoiEdges) {
-                    const N = Math.min(2048, foam.voronoiEdges.length);
-                    for (let i=0;i<N;i++){
-                        const [a,b] = foam.voronoiEdges[i];
-                        keys.push(a<b?`${a}-${b}`:`${b}-${a}`);
-                    }
-                }
-                const sig = `${periodic}|${centering}|${np}|${nt}|${ve}|${keys.join(',')}`;
-                return crc32(sig);
-            }
-
-            let autoTimeout = null;
-
             document.getElementById('computeEdgeScoresBtn').addEventListener('click', () => {
                 if (!voroxInstance) {
                     console.log('No VoroX instance available');
                     return;
                 }
                 const foam = voroxInstance.getFoam();
-                const useMC = document.getElementById('scoreModeMC').checked;
-                const foamHash = buildFoamHash(foam);
-
-                // Skip if up to date
-                const paramsNow = useMC
-                    ? { L: Math.max(2, Math.min(32, parseInt(document.getElementById('mcStepsL').value || 12))), K: Math.round(Math.max(8, Math.min(256, parseInt(document.getElementById('mcWalkersK').value || 64)))/8)*8, alpha: Math.max(0.75, Math.min(0.98, parseFloat((document.getElementById('mcAlpha').value || '0.90').toString().replace(',', '.')))) }
-                    : { depth: parseInt(document.getElementById('dynSearchDepthNum').value) || 15, damping: 0.85 };
-                const methodNow = useMC ? 'mc' : 'pagerank';
-                if (lastEdgeScores && lastEdgeScores.size>0 && lastScoreMethod===methodNow && JSON.stringify(lastScoreParams)===JSON.stringify(paramsNow) && lastFoamHash===foamHash){
-                    setStatus('Scores up to date.', true);
-                    return;
-                }
-
-                // MC cost estimate and warning
-                if (useMC) {
-                    const L = paramsNow.L, K = paramsNow.K, E = foam.voronoiEdges?.length || 0;
-                    const est = 2 * E * K * L;
-                    if (est > 25_000_000) {
-                        const suggested = Math.max(8, Math.floor(10_000_000 / Math.max(1, 2*E*L)/8)*8);
-                        const proceed = confirm(`High cost (≈${Math.round(est/1e6)}M steps). Reduce K to ${suggested}? Click Cancel to keep current and proceed.`);
-                        if (proceed) {
-                            document.getElementById('mcWalkersK').value = suggested;
-                            paramsNow.K = suggested;
-                        }
-                    } else if (est > 10_000_000) {
-                        setStatus(`High cost warning (≈${Math.round(est/1e6)}M steps). Consider reducing K.`, false);
-                    }
-                }
-
-                overlayEl.style.display = 'flex';
-                let edgeResult;
-                if (useMC) {
-                    const { L, K, alpha } = paramsNow;
-                    console.log(`Manual edge score computation (MC): L=${L}, K=${K}, alpha=${alpha}...`);
-                    edgeResult = calculateEdgeScoresMonteCarlo(foam, L, K, alpha);
-                    lastScoreMethod = 'mc';
-                    lastScoreParams = { L, K, alpha };
-                } else {
-                    const { depth } = paramsNow;
-                    console.log(`Manual edge score computation (PR): depth=${depth}...`);
-                    edgeResult = calculateEdgeScores(foam, depth, 0.85);
-                    lastScoreMethod = 'pagerank';
-                    lastScoreParams = { depth, damping: 0.85 };
-                }
+                const depth = parseInt(document.getElementById('dynSearchDepthNum').value) || 15;
+                console.log(`Manual edge score computation with depth=${depth}...`);
+                const edgeResult = calculateEdgeScores(foam, depth, 0.85);
                 lastEdgeScores = edgeResult.scores;
-                lastScoreTimestamp = Date.now();
-                lastFoamHash = foamHash;
                 console.log(`Computed ${lastEdgeScores.size} edge scores`);
                 
                 // Debug: Check if keys match
@@ -1868,7 +1655,7 @@
                 }
                 
                 // Show statistics
-                if (lastEdgeScores && lastEdgeScores.size > 0) {
+                if (lastEdgeScores.size > 0) {
                     const values = Array.from(lastEdgeScores.values());
                     const min = Math.min(...values);
                     const max = Math.max(...values);
@@ -1876,14 +1663,8 @@
                     const statsText = `Edge Scores: min=${min.toFixed(3)}, max=${max.toFixed(3)}, avg=${avg.toFixed(3)}, count=${lastEdgeScores.size}`;
                     console.log(statsText);
                     setStatus(statsText, true);
-                    if (max - min < 1e-3) {
-                        setStatus('Low score variance; try increasing L or decreasing α (MC), or depth (PR)', false);
-                    }
-                } else {
-                    setStatus('No obtuse connectivity within horizon; increase L or α', false);
                 }
                 
-                overlayEl.style.display = 'none';
                 updateScene();
             });
             
@@ -2133,48 +1914,12 @@
             // Re-render on toggles that affect visibility/coloring
             const rerenderIds = [
                 'showVertices','showDelaunay','showTetrahedra','showVoronoi','showVoronoiEdgesToggle','showVoronoiFaces',
-                'showVoroX','showGhostCells','voroxColorByScore','flowColorByScore','voroxMaxSegs','voronoiSize','voronoiVertexColor','showBoundary',
-                'backgroundColor','colorEdgesByScore','showEdgeStats','forceRainbowTest','scoreModePR','scoreModeMC','mcStepsL','mcWalkersK','mcAlpha','mcAutoRecompute','colorSteps','colorPalette','quantization','reversePalette'
+                'showVoroX','showGhostCells','voroxColorByScore','voroxMaxSegs','voronoiSize','voronoiVertexColor','showBoundary',
+                'backgroundColor','colorEdgesByScore','showEdgeStats','forceRainbowTest'
             ];
-            // Initialize scoring UI visibility (no recompute here)
-            const prBlock = document.getElementById('prParamsBlock');
-            const mcBlock = document.getElementById('mcParamsBlock');
-            function updateModeVisibility() {
-                const useMC = document.getElementById('scoreModeMC').checked;
-                if (useMC) { prBlock.style.display = 'none'; mcBlock.style.display = ''; }
-                else { prBlock.style.display = ''; mcBlock.style.display = 'none'; }
-            }
-            updateModeVisibility();
-            ['scoreModePR','scoreModeMC'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.addEventListener('change', () => { updateModeVisibility(); setStatus('Scoring mode switched.', true); if (document.getElementById('mcAutoRecompute').checked) scheduleAutoRecompute(); });
-            });
-
             rerenderIds.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.addEventListener('change', () => {
-                    // Enforce parameter ranges for MC inputs
-                    if (id === 'mcStepsL') {
-                        let v = parseInt(el.value || 12, 10); if (v < 2) v = 2; if (v > 32) v = 32; el.value = v;
-                        setStatus(`Adjusted parameter L to ${v} (valid 2–32)`, true);
-                        if (document.getElementById('mcAutoRecompute').checked) scheduleAutoRecompute();
-                    } else if (id === 'mcWalkersK') {
-                        let v = parseInt(el.value || 64, 10); if (v < 8) v = 8; if (v > 256) v = 256; v = Math.round(v/8)*8; el.value = v;
-                        setStatus(`Adjusted parameter K to ${v} (valid 8–256)`, true);
-                        if (document.getElementById('mcAutoRecompute').checked) scheduleAutoRecompute();
-                    } else if (id === 'mcAlpha') {
-                        let v = parseFloat((el.value || '0.90').toString().replace(',', '.')); if (v < 0.75) v = 0.75; if (v > 0.98) v = 0.98; v = Math.round(v*100)/100; el.value = v.toFixed(2);
-                        setStatus(`Adjusted parameter α to ${el.value} (valid 0.75–0.98)`, true);
-                        if (document.getElementById('mcAutoRecompute').checked) scheduleAutoRecompute();
-                    }
-                    // Capture color mapping UI state (no recompute here; used during draw)
-                    if (id === 'colorSteps' || id === 'colorPalette' || id === 'quantization' || id === 'reversePalette') {
-                        colorSteps = Math.max(2, Math.min(10, parseInt(document.getElementById('colorSteps').value || 5)));
-                        paletteId = document.getElementById('colorPalette').value || 'seq_ryg';
-                        quantization = document.getElementById('quantization').value || 'equal';
-                        reversePalette = !!document.getElementById('reversePalette').checked;
-                        cachedThresholds = null; cachedStepColors = null; cachedScoreHash = null; // invalidate cache
-                    }
                     // If edge coloring is enabled, compute scores immediately
                     if (id === 'colorEdgesByScore' && el.checked && voroxInstance) {
                         const foam = voroxInstance.getFoam();
@@ -2215,14 +1960,6 @@
                     updateScene();
                 });
             });
-
-            function scheduleAutoRecompute(){
-                if (autoTimeout) { clearTimeout(autoTimeout); autoTimeout = null; }
-                autoTimeout = setTimeout(()=>{
-                    const btn = document.getElementById('computeEdgeScoresBtn');
-                    if (btn) btn.click();
-                }, 275);
-            }
 
             function animate() {
                 const now = performance.now();

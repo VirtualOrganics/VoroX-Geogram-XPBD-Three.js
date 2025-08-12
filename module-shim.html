@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Module Shim - Make it work!</title>
+    <script src="/dist/periodic_delaunay.js"></script>
+    <script>
+        // Fix the module availability issue
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('Checking for PeriodicDelaunayModule...');
+            
+            if (typeof PeriodicDelaunayModule !== 'undefined' && typeof window.PeriodicDelaunayModule === 'undefined') {
+                window.PeriodicDelaunayModule = PeriodicDelaunayModule;
+                console.log('✅ Made PeriodicDelaunayModule available on window');
+            } else if (typeof window.PeriodicDelaunayModule !== 'undefined') {
+                console.log('✅ window.PeriodicDelaunayModule already available');
+            } else {
+                console.log('❌ PeriodicDelaunayModule not found');
+            }
+            
+            // Redirect to main app
+            setTimeout(() => {
+                window.location.href = '/examples/basic/index.html';
+            }, 1000);
+        });
+    </script>
+</head>
+<body>
+    <h1>Fixing module loading...</h1>
+    <p>Redirecting to main app in 1 second...</p>
+</body>
+</html>

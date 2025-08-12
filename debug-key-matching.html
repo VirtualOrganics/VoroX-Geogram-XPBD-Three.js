@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Edge Key Matching</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        button { padding: 10px; margin: 10px; }
+        #results { margin-top: 20px; white-space: pre; }
+    </style>
+    <script src="/dist/periodic_delaunay.js"></script>
+    <script>
+        // Make module available on window for compatibility
+        if (typeof PeriodicDelaunayModule !== 'undefined' && typeof window.PeriodicDelaunayModule === 'undefined') {
+            window.PeriodicDelaunayModule = PeriodicDelaunayModule;
+        }
+    </script>
+</head>
+<body>
+    <h1>Debug Edge Key Matching</h1>
+    <button onclick="testKeys()">Test Edge Keys</button>
+    <div id="results"></div>
+
+    <script type="module">
+        import { createVoroX } from '/src/js/VoroXAdapter.js';
+        import { calculateEdgeScores } from '/src/js/vorox2/dynamics.js';
+        
+        window.testKeys = async function() {
+            const results = document.getElementById('results');
+            results.textContent = 'Loading WASM module...';
+            
+            try {
+                // Wait a moment for module to be available
+                let attempts = 0;
+                while (typeof PeriodicDelaunayModule === 'undefined' && attempts < 10) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    attempts++;
+                }
+                
+                if (typeof PeriodicDelaunayModule === 'undefined') {
+                    throw new Error('PeriodicDelaunayModule not loaded after waiting. Refresh the page.');
+                }
+                
+                const Module = await PeriodicDelaunayModule();
+                
+                // Generate test points
+                const N = 30;
+                const points = [];
+                for (let i = 0; i < N; i++) {
+                    points.push([Math.random(), Math.random(), Math.random()]);
+                }
+                
+                // Create VoroX instance
+                const vorox = await createVoroX({
+                    Module,
+                    points,
+                    periodic: true,
+                    centering: true
+                });
+                
+                // Get foam
+                const foam = vorox.getFoam();
+                
+                // Compute edge scores
+                const edgeResult = calculateEdgeScores(foam, 10, 0.85);
+                const scores = edgeResult.scores;
+                
+                let output = 'KEY MATCHING TEST\n';
+                output += '================\n\n';
+                
+                // Test first 5 edges
+                output += 'FOAM EDGES (first 5):\n';
+                for (let i = 0; i < Math.min(5, foam.voronoiEdges.length); i++) {
+                    const edge = foam.voronoiEdges[i];
+                    const key = `${Math.min(edge[0], edge[1])}-${Math.max(edge[0], edge[1])}`;
+                    output += `  Edge ${i}: [${edge[0]}, ${edge[1]}] → key: "${key}"\n`;
+                }
+                
+                output += '\nSCORE KEYS (first 5):\n';
+                const scoreKeys = Array.from(scores.keys()).slice(0, 5);
+                scoreKeys.forEach((key, i) => {
+                    output += `  Score ${i}: "${key}" = ${scores.get(key).toFixed(4)}\n`;
+                });
+                
+                output += '\nMATCHING TEST:\n';
+                let matches = 0;
+                let mismatches = 0;
+                
+                for (const edge of foam.voronoiEdges) {
+                    const key = `${Math.min(edge[0], edge[1])}-${Math.max(edge[0], edge[1])}`;
+                    if (scores.has(key)) {
+                        matches++;
+                    } else {
+                        mismatches++;
+                        if (mismatches <= 3) {
+                            output += `  Missing: "${key}" (from edge [${edge[0]}, ${edge[1]}])\n`;
+                        }
+                    }
+                }
+                
+                output += `\nRESULTS:\n`;
+                output += `  Total foam edges: ${foam.voronoiEdges.length}\n`;
+                output += `  Total score keys: ${scores.size}\n`;
+                output += `  Matches: ${matches}\n`;
+                output += `  Mismatches: ${mismatches}\n`;
+                
+                if (mismatches === 0) {
+                    output += '\n✅ ALL KEYS MATCH!';
+                } else {
+                    output += '\n❌ KEY MISMATCH DETECTED!';
+                }
+                
+                results.textContent = output;
+                
+            } catch (error) {
+                results.textContent = 'Error: ' + error.toString() + '\n\n' + error.stack;
+            }
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Force Edge Colors Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <style>
+        body { margin: 0; font-family: Arial; }
+        #info { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.8); color: white; padding: 15px; }
+        button { margin: 5px; padding: 5px 10px; }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h3>Testing Individual Edge Colors in Three.js</h3>
+        <button onclick="testMethod1()">Method 1: Individual Materials</button>
+        <button onclick="testMethod2()">Method 2: Vertex Colors</button>
+        <button onclick="testMethod3()">Method 3: Force Unique Colors</button>
+        <div id="status">Click a button to test...</div>
+    </div>
+
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x222222);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 0, 5);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        
+        // Group for edges - declare BEFORE clearEdges function
+        let edgeGroup = new THREE.Group();
+        scene.add(edgeGroup);
+        
+        function clearEdges() {
+            while(edgeGroup.children.length > 0) {
+                const child = edgeGroup.children[0];
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) child.material.dispose();
+                edgeGroup.remove(child);
+            }
+        }
+        
+        // Method 1: Individual LineBasicMaterial for each edge
+        function testMethod1() {
+            clearEdges();
+            const status = document.getElementById('status');
+            status.innerHTML = '<b>Method 1:</b> Individual Materials<br>';
+            
+            // Create 20 random edges with different colors
+            for (let i = 0; i < 20; i++) {
+                const points = [];
+                points.push(new THREE.Vector3(
+                    (Math.random() - 0.5) * 4,
+                    (Math.random() - 0.5) * 4,
+                    (Math.random() - 0.5) * 4
+                ));
+                points.push(new THREE.Vector3(
+                    (Math.random() - 0.5) * 4,
+                    (Math.random() - 0.5) * 4,
+                    (Math.random() - 0.5) * 4
+                ));
+                
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                
+                // Create color based on index (red -> yellow -> green gradient)
+                const t = i / 19; // normalize to 0-1
+                const color = new THREE.Color();
+                color.setHSL(t * 0.33, 1.0, 0.5); // red to green
+                
+                const material = new THREE.LineBasicMaterial({
+                    color: color.getHex(),
+                    linewidth: 2
+                });
+                
+                const line = new THREE.Line(geometry, material);
+                edgeGroup.add(line);
+                
+                const hexColor = '#' + color.getHex().toString(16).padStart(6, '0').toUpperCase();
+                status.innerHTML += `Edge ${i}: ${hexColor}<br>`;
+            }
+        }
+        
+        // Method 2: Using vertex colors
+        function testMethod2() {
+            clearEdges();
+            const status = document.getElementById('status');
+            status.innerHTML = '<b>Method 2:</b> Vertex Colors<br>';
+            
+            for (let i = 0; i < 20; i++) {
+                const points = [];
+                points.push(new THREE.Vector3(
+                    (Math.random() - 0.5) * 4,
+                    (Math.random() - 0.5) * 4,
+                    (Math.random() - 0.5) * 4
+                ));
+                points.push(new THREE.Vector3(
+                    (Math.random() - 0.5) * 4,
+                    (Math.random() - 0.5) * 4,
+                    (Math.random() - 0.5) * 4
+                ));
+                
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                
+                // Add vertex colors
+                const t = i / 19;
+                const color = new THREE.Color();
+                color.setHSL(t * 0.33, 1.0, 0.5);
+                
+                const colors = new Float32Array(6); // 2 vertices * 3 color components
+                colors[0] = color.r;
+                colors[1] = color.g;
+                colors[2] = color.b;
+                colors[3] = color.r;
+                colors[4] = color.g;
+                colors[5] = color.b;
+                
+                geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+                
+                const material = new THREE.LineBasicMaterial({
+                    vertexColors: true,
+                    linewidth: 2
+                });
+                
+                const line = new THREE.Line(geometry, material);
+                edgeGroup.add(line);
+                
+                const hexColor = '#' + color.getHex().toString(16).padStart(6, '0').toUpperCase();
+                status.innerHTML += `Edge ${i}: ${hexColor}<br>`;
+            }
+        }
+        
+        // Method 3: Force completely unique colors
+        function testMethod3() {
+            clearEdges();
+            const status = document.getElementById('status');
+            status.innerHTML = '<b>Method 3:</b> Force Unique Colors<br>';
+            
+            const uniqueColors = [
+                0xFF0000, // Pure red
+                0x00FF00, // Pure green
+                0x0000FF, // Pure blue
+                0xFFFF00, // Yellow
+                0xFF00FF, // Magenta
+                0x00FFFF, // Cyan
+                0xFF8800, // Orange
+                0x8800FF, // Purple
+                0x00FF88, // Teal
+                0xFF0088, // Pink
+            ];
+            
+            for (let i = 0; i < 10; i++) {
+                const points = [];
+                points.push(new THREE.Vector3(
+                    (Math.random() - 0.5) * 4,
+                    (Math.random() - 0.5) * 4,
+                    (Math.random() - 0.5) * 4
+                ));
+                points.push(new THREE.Vector3(
+                    (Math.random() - 0.5) * 4,
+                    (Math.random() - 0.5) * 4,
+                    (Math.random() - 0.5) * 4
+                ));
+                
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const material = new THREE.LineBasicMaterial({
+                    color: uniqueColors[i],
+                    linewidth: 3,
+                    opacity: 1.0,
+                    transparent: false
+                });
+                
+                const line = new THREE.Line(geometry, material);
+                edgeGroup.add(line);
+                
+                const hexColor = '#' + uniqueColors[i].toString(16).padStart(6, '0').toUpperCase();
+                status.innerHTML += `Edge ${i}: ${hexColor} (Material: ${material.color.getHex().toString(16).toUpperCase()})<br>`;
+            }
+        }
+        
+        // Animation
+        function animate() {
+            requestAnimationFrame(animate);
+            edgeGroup.rotation.y += 0.005;
+            renderer.render(scene, camera);
+        }
+        animate();
+        
+        // Resize handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // Auto-test Method 1
+        setTimeout(() => testMethod1(), 500);
+    </script>
+</body>
+</html>

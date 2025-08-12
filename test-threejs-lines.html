@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Three.js Line Color Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: Arial; }
+        #info { position: absolute; top: 10px; left: 10px; color: white; background: rgba(0,0,0,0.7); padding: 10px; }
+    </style>
+</head>
+<body>
+    <div id="info">
+        Testing if Three.js can render lines with individual colors<br>
+        You should see: RED, YELLOW, GREEN, BLUE, PURPLE lines
+    </div>
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x222222);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 5;
+        
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        
+        // Create lines with different colors
+        const colors = [
+            0xff0000,  // Red
+            0xffff00,  // Yellow  
+            0x00ff00,  // Green
+            0x0000ff,  // Blue
+            0xff00ff   // Purple
+        ];
+        
+        const group = new THREE.Group();
+        
+        for (let i = 0; i < 5; i++) {
+            const points = [];
+            const y = (i - 2) * 0.8;
+            points.push(new THREE.Vector3(-2, y, 0));
+            points.push(new THREE.Vector3(2, y, 0));
+            
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const material = new THREE.LineBasicMaterial({ 
+                color: colors[i],
+                linewidth: 3  // Note: linewidth doesn't work in WebGL
+            });
+            const line = new THREE.Line(geometry, material);
+            group.add(line);
+            
+            console.log(`Created line ${i} with color 0x${colors[i].toString(16)}`);
+        }
+        
+        scene.add(group);
+        
+        // Animation
+        function animate() {
+            requestAnimationFrame(animate);
+            group.rotation.y += 0.01;
+            renderer.render(scene, camera);
+        }
+        animate();
+        
+        // Resize handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

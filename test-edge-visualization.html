@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edge PageRank Visualization Test</title>
+    <style>
+        body { 
+            margin: 0; 
+            font-family: Arial, sans-serif;
+            display: flex;
+        }
+        #canvas-container {
+            width: 70%;
+            height: 100vh;
+        }
+        #info {
+            width: 30%;
+            padding: 20px;
+            background: #f0f0f0;
+            overflow-y: auto;
+            height: 100vh;
+        }
+        button {
+            margin: 5px;
+            padding: 10px;
+            cursor: pointer;
+        }
+        #stats {
+            background: white;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+    </style>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.164.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.0/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    <div id="info">
+        <h2>Edge PageRank Test</h2>
+        <button id="compute-btn">Compute Edge Scores</button>
+        <button id="toggle-colors">Toggle Edge Colors</button>
+        <button id="step-btn">Step Physics</button>
+        <button id="run-btn">Run/Stop</button>
+        
+        <div id="stats">
+            <h3>Statistics</h3>
+            <div id="stats-content">Loading...</div>
+        </div>
+        
+        <div id="scores">
+            <h3>Edge Scores</h3>
+            <div id="scores-content"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { createVoroX } from './src/js/VoroXAdapter.js';
+        import { calculateEdgeScores, gradient, createVerletSystem } from './src/js/vorox2/dynamics.js';
+        
+        let scene, camera, renderer, controls;
+        let vorox, foam, edgeScores;
+        let edgeGroup, vertexGroup;
+        let colorByScore = false;
+        let running = false;
+        let verlet;
+        
+        async function init() {
+            // Setup Three.js
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x222222);
+            
+            camera = new THREE.PerspectiveCamera(
+                75, 
+                container.clientWidth / container.clientHeight,
+                0.01, 
+                10
+            );
+            camera.position.set(2, 2, 2);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            container.appendChild(renderer.domElement);
+            
+            controls = new OrbitControls(camera, renderer.domElement);
+            
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
+            directionalLight.position.set(1, 1, 1);
+            scene.add(directionalLight);
+            
+            // Groups
+            edgeGroup = new THREE.Group();
+            vertexGroup = new THREE.Group();
+            scene.add(edgeGroup);
+            scene.add(vertexGroup);
+            
+            // Load WASM
+            const script = document.createElement('script');
+            script.src = './dist/periodic_delaunay.js';
+            document.head.appendChild(script);
+            await new Promise(resolve => script.onload = resolve);
+            const Module = await window.PeriodicDelaunayModule();
+            
+            // Create test points (3x3x3 grid with some randomness)
+            const points = [];
+            for (let x = 0; x < 3; x++) {
+                for (let y = 0; y < 3; y++) {
+                    for (let z = 0; z < 3; z++) {
+                        points.push([
+                            (x + Math.random() * 0.3) / 3 + 0.1,
+                            (y + Math.random() * 0.3) / 3 + 0.1,
+                            (z + Math.random() * 0.3) / 3 + 0.1
+                        ]);
+                    }
+                }
+            }
+            
+            // Create VoroX (using correct API)
+            vorox = await createVoroX({ 
+                Module: Module, 
+                points: points, 
+                periodic: true,
+                centering: 'circumcenter'
+            });
+            foam = vorox.getFoam();
+            verlet = createVerletSystem(foam.points.length, true);
+            verlet.initialize(foam.points);
+            
+            updateVisualization();
+            updateStats();
+        }
+        
+        function updateVisualization() {
+            // Clear existing geometry
+            edgeGroup.clear();
+            vertexGroup.clear();
+            
+            // Draw vertices
+            const sphereGeom = new THREE.SphereGeometry(0.02, 8, 8);
+            const sphereMat = new THREE.MeshPhongMaterial({ color: 0x4444ff });
+            
+            foam.centers.forEach(center => {
+                if (!center) return;
+                const sphere = new THREE.Mesh(sphereGeom, sphereMat);
+                sphere.position.set(center[0], center[1], center[2]);
+                vertexGroup.add(sphere);
+            });
+            
+            // Draw edges
+            foam.voronoiEdges.forEach(edgePair => {
+                const [t1, t2] = edgePair;
+                const p1 = foam.centers[t1];
+                const p2 = foam.centers[t2];
+                if (!p1 || !p2) return;
+                
+                let color = 0xffffff;
+                let linewidth = 1;
+                
+                if (colorByScore && edgeScores) {
+                    const key = `${Math.min(t1, t2)}-${Math.max(t1, t2)}`;
+                    const score = edgeScores.get(key) || 0;
+                    // Color from red (low) to green (high)
+                    const hue = score * 0.33;
+                    color = new THREE.Color().setHSL(hue, 0.9, 0.5);
+                    linewidth = 1 + score * 3;
+                }
+                
+                const geometry = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(...p1),
+                    new THREE.Vector3(...p2)
+                ]);
+                const material = new THREE.LineBasicMaterial({ 
+                    color: color,
+                    linewidth: linewidth
+                });
+                const line = new THREE.Line(geometry, material);
+                edgeGroup.add(line);
+            });
+            
+            renderer.render(scene, camera);
+        }
+        
+        function computeEdgeScores() {
+            console.log('Computing edge scores...');
+            const result = calculateEdgeScores(foam, 10, 0.85);
+            edgeScores = result.scores;
+            
+            // Display scores
+            const scoresDiv = document.getElementById('scores-content');
+            const sortedScores = Array.from(edgeScores.entries())
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+            
+            scoresDiv.innerHTML = sortedScores.map(([key, score]) => 
+                `<div>${key}: ${score.toFixed(4)}</div>`
+            ).join('');
+            
+            console.log('Edge graph:', result.graph);
+            console.log('Scores:', edgeScores);
+            
+            updateStats();
+            updateVisualization();
+        }
+        
+        function updateStats() {
+            const stats = document.getElementById('stats-content');
+            let html = `
+                <div>Points: ${foam.points.length}</div>
+                <div>Tetrahedra: ${foam.simplices.length}</div>
+                <div>Voronoi Edges: ${foam.voronoiEdges.length}</div>
+            `;
+            
+            if (edgeScores) {
+                const scores = Array.from(edgeScores.values());
+                const min = Math.min(...scores);
+                const max = Math.max(...scores);
+                const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+                
+                html += `
+                    <div>Edge Scores Computed: ${edgeScores.size}</div>
+                    <div>Min Score: ${min.toFixed(4)}</div>
+                    <div>Max Score: ${max.toFixed(4)}</div>
+                    <div>Avg Score: ${avg.toFixed(4)}</div>
+                `;
+            }
+            
+            stats.innerHTML = html;
+        }
+        
+        function step() {
+            // Apply edge-based dynamics
+            const forces = gradient(foam, {
+                useEdgeMode: true,
+                edgeScores: edgeScores,
+                edge_scale: false,
+                scale: 0.5,
+                energy: 0.001,
+                equilibration: true,
+                contractive: true,
+                expansive: false,
+                threshold: 0.5,
+                searchDepth: 10
+            });
+            
+            verlet.setForces(forces);
+            const newPoints = verlet.integrate(0.02);
+            vorox.setPoints(newPoints);
+            foam = vorox.getFoam();
+            
+            // Recompute scores if they exist
+            if (edgeScores) {
+                computeEdgeScores();
+            }
+            
+            updateVisualization();
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            
+            if (running) {
+                step();
+            }
+        }
+        
+        // Event handlers
+        document.getElementById('compute-btn').addEventListener('click', computeEdgeScores);
+        document.getElementById('toggle-colors').addEventListener('click', () => {
+            colorByScore = !colorByScore;
+            updateVisualization();
+        });
+        document.getElementById('step-btn').addEventListener('click', step);
+        document.getElementById('run-btn').addEventListener('click', () => {
+            running = !running;
+            document.getElementById('run-btn').textContent = running ? 'Stop' : 'Run';
+        });
+        
+        // Initialize
+        init().then(animate);
+    </script>
+</body>
+</html>

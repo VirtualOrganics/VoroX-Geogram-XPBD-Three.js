@@ -1,91 +1,102 @@
 import { computeCenters, buildFacetPairs, minImagePoint } from './core.js';
 
-export function facetDir(centers, from, to, isPeriodic) {
-  const c1 = centers[from.tet];
-  let c2 = centers[to.tet];
-  if (isPeriodic) c2 = minImagePoint(c1, c2);
+function getVoronoiEdgeDir(centers, from_tet_idx, to_tet_idx, isPeriodic) {
+  const c1 = centers[from_tet_idx];
+  const c2_raw = centers[to_tet_idx];
+  if (!c1 || !c2_raw) return null;
+  const c2 = isPeriodic ? minImagePoint(c1, c2_raw) : c2_raw;
   const d = [c2[0]-c1[0], c2[1]-c1[1], c2[2]-c1[2]];
   const n = Math.hypot(d[0], d[1], d[2]);
-  if (n === 0) return [0,0,0];
+  if (n < 1e-9) return null;
   return [d[0]/n, d[1]/n, d[2]/n];
 }
 
-export function computeActiveEdges(tetrahedra, centers, facetPairs, isPeriodic) {
-  const active = Array.from({length: tetrahedra.length}, ()=>Array(4).fill(null));
-  for (let ti=0; ti<tetrahedra.length; ti++) {
-    for (let fi=0; fi<4; fi++) {
-      const mirror = facetPairs[ti][fi];
-      if (!mirror) continue;
-      let best = null, bestDot = -1;
-      const dir = facetDir(centers, {tet:ti, face:fi}, mirror, isPeriodic);
-      const simplex = mirror.tet;
-      for (let candFace=0; candFace<4; candFace++) {
-        if (candFace === mirror.face) continue;
-        const nextNext = facetPairs[simplex][candFace];
-        if (!nextNext) continue;
-        const ndir = facetDir(centers, mirror, nextNext, isPeriodic);
-        const dot = dir[0]*ndir[0] + dir[1]*ndir[1] + dir[2]*ndir[2];
-        if (dot > bestDot) { bestDot = dot; best = { tet: simplex, face: candFace }; }
-      }
-      active[ti][fi] = best;
-    }
-  }
-  return active;
-}
+export function buildLinkGraph(tetrahedra, centers, facetPairs, isPeriodic) {
+  const numTets = tetrahedra.length;
+  const graph = Array.from({ length: numTets }, () => ({ in: [], out: [] }));
 
-export function detectKnots(activeEdges) {
-  const T = activeEdges.length;
-  const visited = Array.from({length:T}, ()=>Array(4).fill(false));
-  const facetKnot = Array.from({length:T}, ()=>Array(4).fill(0));
-  const knotDist = Array.from({length:T}, ()=>Array(4).fill(0));
-  const knots = [];
-  const numCatched = [];
+  for (let t1_idx = 0; t1_idx < numTets; t1_idx++) {
+    for (let f1_idx = 0; f1_idx < 4; f1_idx++) {
+      const mirror1 = facetPairs[t1_idx][f1_idx];
+      if (!mirror1) continue;
+      const t2_idx = mirror1.tet;
+      
+      const incoming_dir = getVoronoiEdgeDir(centers, t1_idx, t2_idx, isPeriodic);
+      if (!incoming_dir) continue;
+      
+      for (let f2_idx = 0; f2_idx < 4; f2_idx++) {
+        if (f2_idx === mirror1.face) continue;
+        
+        const mirror2 = facetPairs[t2_idx][f2_idx];
+        if (!mirror2) continue;
+        const t3_idx = mirror2.tet;
 
-  function eq(a,b){ return a && b && a.tet===b.tet && a.face===b.face; }
+        const outgoing_dir = getVoronoiEdgeDir(centers, t2_idx, t3_idx, isPeriodic);
+        if (!outgoing_dir) continue;
 
-  for (let ti=0; ti<T; ti++) {
-    for (let fi=0; fi<4; fi++) {
-      if (visited[ti][fi]) continue;
-      const path = [{tet:ti, face:fi}];
-      const index = new Map(); index.set(`${ti}:${fi}`, 1);
-      let cur = activeEdges[ti][fi];
-      while (cur && !visited[cur.tet][cur.face] && !index.has(`${cur.tet}:${cur.face}`)) {
-        path.push(cur);
-        index.set(`${cur.tet}:${cur.face}`, path.length);
-        cur = activeEdges[cur.tet][cur.face];
-      }
-      let startKnot, targetKnot;
-      if (!cur) {
-        startKnot = path.length + 1; targetKnot = 0;
-      } else if (visited[cur.tet][cur.face]) {
-        startKnot = path.length + 1 + knotDist[cur.tet][cur.face];
-        targetKnot = facetKnot[cur.tet][cur.face];
-      } else {
-        startKnot = index.get(`${cur.tet}:${cur.face}`);
-        knots.push(path.slice(startKnot-1));
-        numCatched.push(0);
-        targetKnot = knots.length;
-      }
-      for (let i=0;i<path.length;i++) {
-        const f = path[i];
-        visited[f.tet][f.face] = true;
-        facetKnot[f.tet][f.face] = targetKnot;
-        if (i+1 < startKnot) {
-          knotDist[f.tet][f.face] = startKnot - (i+1);
-          if (targetKnot) numCatched[targetKnot-1] += 1;
+        const dot = incoming_dir[0]*outgoing_dir[0] + incoming_dir[1]*outgoing_dir[1] + incoming_dir[2]*outgoing_dir[2];
+        
+        if (dot < 0) { // OBTUSE = LET FLOW (CONNECT)
+          graph[t1_idx].out.push({ from: f1_idx, to: mirror1.face, targetTet: t2_idx });
         }
       }
     }
   }
-  return { knots, facetKnot, knotDist, numCatched };
+
+  // Simplified graph for PageRank
+  const simpleGraph = Array.from({ length: numTets }, () => ({ in: [], out: [] }));
+  for (let i = 0; i < numTets; i++) {
+      for(let j=0; j < graph[i].out.length; j++) {
+        const target = graph[i].out[j].targetTet;
+        if (!simpleGraph[i].out.includes(target)) simpleGraph[i].out.push(target);
+        if (!simpleGraph[target].in.includes(i)) simpleGraph[target].in.push(i);
+      }
+  }
+
+  return simpleGraph;
 }
 
 export function buildFoam({ pointsArray, tetrahedra, isPeriodic, centering='centroid' }) {
   const centers = computeCenters(pointsArray, tetrahedra, isPeriodic, centering);
   const facetPairs = buildFacetPairs(tetrahedra);
-  const activeEdges = computeActiveEdges(tetrahedra, centers, facetPairs, isPeriodic);
-  const { knots, facetKnot, knotDist, numCatched } = detectKnots(activeEdges);
-  return { points: pointsArray, simplices: tetrahedra, centers, facetPairs, activeEdges, knots, facetKnot, knotDist, numCatched, isPeriodic };
+  
+  const voronoiEdgeToDelaunayFace = new Map();
+  const delaunayFaceToVoronoiEdge = new Map();
+  const voronoiEdges = [];
+
+  for (let t1_idx = 0; t1_idx < tetrahedra.length; t1_idx++) {
+      const tet1 = tetrahedra[t1_idx];
+      for (let f1_idx = 0; f1_idx < 4; f1_idx++) {
+          const mirror = facetPairs[t1_idx][f1_idx];
+          if (!mirror) continue;
+          const t2_idx = mirror.tet;
+          
+          if (t1_idx < t2_idx) {
+              const faceVertices = tet1.filter((_, i) => i !== f1_idx);
+              const edgeKey = `${t1_idx}-${t2_idx}`;
+              voronoiEdgeToDelaunayFace.set(edgeKey, faceVertices);
+              
+              const faceKey = faceVertices.slice().sort().join('-');
+              delaunayFaceToVoronoiEdge.set(faceKey, [t1_idx, t2_idx]);
+
+              voronoiEdges.push([t1_idx, t2_idx]);
+          }
+      }
+  }
+
+  const linkGraph = buildLinkGraph(tetrahedra, centers, facetPairs, isPeriodic);
+  
+  return { 
+    points: pointsArray, 
+    simplices: tetrahedra, 
+    centers, 
+    facetPairs,
+    voronoiEdges,
+    voronoiEdgeToDelaunayFace,
+    delaunayFaceToVoronoiEdge,
+    linkGraph,
+    isPeriodic 
+  };
 }
 
 

@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Edge Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        button { padding: 10px 20px; margin: 10px; cursor: pointer; }
+        #canvas { border: 1px solid #ccc; }
+        #info { margin-top: 10px; }
+        .controls { margin: 10px 0; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.min.js"></script>
+    <script src="/dist/periodic_delaunay.js"></script>
+    <script>
+        // Make module available on window for compatibility
+        if (typeof PeriodicDelaunayModule !== 'undefined' && typeof window.PeriodicDelaunayModule === 'undefined') {
+            window.PeriodicDelaunayModule = PeriodicDelaunayModule;
+        }
+    </script>
+</head>
+<body>
+    <h1>Simple Edge Coloring Test</h1>
+    <div class="controls">
+        <button onclick="generatePoints()">Generate Points</button>
+        <button onclick="computeScores()">Compute Scores</button>
+        <button onclick="toggleColoring()">Toggle Coloring</button>
+        <label>Search Depth: <input type="number" id="depth" value="20" min="1" max="50"></label>
+    </div>
+    <div id="info">Ready</div>
+    <div id="canvas"></div>
+
+    <script type="module">
+        import { createVoroX } from '/src/js/VoroXAdapter.js';
+        import { calculateEdgeScores } from '/src/js/vorox2/dynamics.js';
+        
+        let scene, camera, renderer;
+        let vorox, foam, scores;
+        let edgeGroup;
+        let useColoring = false;
+        
+        // Initialize Three.js
+        function initThree() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x222222);
+            
+            camera = new THREE.PerspectiveCamera(75, 800/600, 0.1, 1000);
+            camera.position.set(0.5, 0.5, 2);
+            camera.lookAt(0.5, 0.5, 0.5);
+            
+            renderer = new THREE.WebGLRenderer();
+            renderer.setSize(800, 600);
+            document.getElementById('canvas').appendChild(renderer.domElement);
+            
+            edgeGroup = new THREE.Group();
+            scene.add(edgeGroup);
+            
+            animate();
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+        
+        window.generatePoints = async function() {
+            const info = document.getElementById('info');
+            info.textContent = 'Generating points...';
+            
+            // Create irregular points for better score variation
+            const N = 30;
+            const points = [];
+            for (let i = 0; i < N; i++) {
+                points.push([
+                    Math.random() * 0.8 + 0.1,
+                    Math.random() * 0.8 + 0.1,
+                    Math.random() * 0.8 + 0.1
+                ]);
+            }
+            
+            // Wait for module to be available
+            let attempts = 0;
+            while (typeof PeriodicDelaunayModule === 'undefined' && attempts < 10) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+                attempts++;
+            }
+            
+            if (typeof PeriodicDelaunayModule === 'undefined') {
+                alert('PeriodicDelaunayModule not loaded. Refresh the page.');
+                return;
+            }
+            
+            const Module = await PeriodicDelaunayModule();
+            vorox = await createVoroX({
+                Module,
+                points,
+                periodic: true,
+                centering: true
+            });
+            
+            foam = vorox.getFoam();
+            info.textContent = `Generated ${foam.voronoiEdges.length} edges`;
+            
+            drawEdges();
+        };
+        
+        window.computeScores = function() {
+            if (!foam) {
+                alert('Generate points first!');
+                return;
+            }
+            
+            const info = document.getElementById('info');
+            const depth = parseInt(document.getElementById('depth').value);
+            info.textContent = `Computing scores with depth ${depth}...`;
+            
+            const result = calculateEdgeScores(foam, depth, 0.85);
+            scores = result.scores;
+            
+            // Get statistics
+            const values = Array.from(scores.values());
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            const avg = values.reduce((a,b) => a+b, 0) / values.length;
+            
+            info.textContent = `Computed ${scores.size} scores. Range: ${min.toFixed(3)} to ${max.toFixed(3)} (avg: ${avg.toFixed(3)})`;
+            
+            if (useColoring) {
+                drawEdges();
+            }
+        };
+        
+        window.toggleColoring = function() {
+            useColoring = !useColoring;
+            const info = document.getElementById('info');
+            info.textContent = `Coloring: ${useColoring ? 'ON' : 'OFF'}`;
+            drawEdges();
+        };
+        
+        function drawEdges() {
+            if (!foam) return;
+            
+            // Clear existing edges
+            edgeGroup.clear();
+            
+            let coloredCount = 0;
+            let colors = new Set();
+            
+            for (const edge of foam.voronoiEdges) {
+                const p1 = foam.centers[edge[0]];
+                const p2 = foam.centers[edge[1]];
+                
+                const geometry = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(...p1),
+                    new THREE.Vector3(...p2)
+                ]);
+                
+                let material;
+                if (useColoring && scores) {
+                    const key = `${Math.min(edge[0], edge[1])}-${Math.max(edge[0], edge[1])}`;
+                    const score = scores.get(key);
+                    
+                    if (score !== undefined) {
+                        // Map score to color
+                        const hue = score * 0.33; // 0=red, 0.33=green
+                        const color = new THREE.Color();
+                        color.setHSL(hue, 1.0, 0.5);
+                        
+                        material = new THREE.LineBasicMaterial({ 
+                            color: color,
+                            linewidth: 2
+                        });
+                        
+                        coloredCount++;
+                        colors.add(color.getHexString());
+                    } else {
+                        // Default white if no score
+                        material = new THREE.LineBasicMaterial({ 
+                            color: 0xffffff,
+                            linewidth: 1
+                        });
+                    }
+                } else {
+                    // Default yellow when not coloring
+                    material = new THREE.LineBasicMaterial({ 
+                        color: 0xffff00,
+                        linewidth: 1
+                    });
+                }
+                
+                const line = new THREE.Line(geometry, material);
+                edgeGroup.add(line);
+            }
+            
+            if (useColoring && scores) {
+                console.log(`Colored ${coloredCount}/${foam.voronoiEdges.length} edges with ${colors.size} unique colors`);
+            }
+        }
+        
+        // Initialize on load
+        initThree();
+    </script>
+</body>
+</html>

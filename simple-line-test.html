@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Line Color Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; }
+        #info { position: absolute; top: 10px; left: 10px; color: white; font-family: monospace; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div id="info">
+        PROOF: Three.js CAN render different colored lines!<br>
+        You should see: RED, YELLOW, GREEN, CYAN, BLUE, MAGENTA lines<br>
+        <br>
+        If all lines are the same color = Three.js issue<br>
+        If lines are different colors = Our Voronoi code issue
+    </div>
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 5;
+        
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        
+        // Create 6 lines with EXPLICITLY DIFFERENT colors
+        const lines = [];
+        const colors = [
+            { hex: 0xFF0000, name: 'RED' },
+            { hex: 0xFFFF00, name: 'YELLOW' },
+            { hex: 0x00FF00, name: 'GREEN' },
+            { hex: 0x00FFFF, name: 'CYAN' },
+            { hex: 0x0000FF, name: 'BLUE' },
+            { hex: 0xFF00FF, name: 'MAGENTA' }
+        ];
+        
+        for (let i = 0; i < 6; i++) {
+            const y = (i - 2.5) * 0.4;
+            
+            // Create geometry
+            const points = [];
+            points.push(new THREE.Vector3(-2, y, 0));
+            points.push(new THREE.Vector3(2, y, 0));
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            
+            // Create material with SPECIFIC color
+            const material = new THREE.LineBasicMaterial({ 
+                color: colors[i].hex,
+                linewidth: 5  // Note: linewidth doesn't work in WebGL
+            });
+            
+            // Create line
+            const line = new THREE.Line(geometry, material);
+            scene.add(line);
+            lines.push(line);
+            
+            // Log what we created
+            console.log(`Line ${i}: ${colors[i].name} (0x${colors[i].hex.toString(16).toUpperCase()})`);
+            console.log(`  Material color:`, material.color);
+            console.log(`  Material hex: 0x${material.color.getHex().toString(16).toUpperCase()}`);
+        }
+        
+        // Animation
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Rotate all lines
+            lines.forEach((line, i) => {
+                line.rotation.z = Math.sin(Date.now() * 0.001 + i) * 0.1;
+            });
+            
+            renderer.render(scene, camera);
+        }
+        animate();
+        
+        // Test: Log material colors every 2 seconds
+        setInterval(() => {
+            console.log('\n=== Current Material Colors ===');
+            lines.forEach((line, i) => {
+                const color = line.material.color;
+                console.log(`Line ${i}: 0x${color.getHex().toString(16).toUpperCase()} (${colors[i].name})`);
+            });
+        }, 2000);
+    </script>
+</body>
+</html>

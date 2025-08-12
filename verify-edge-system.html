@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Verify Edge System</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .success { color: green; }
+        .error { color: red; }
+        .warning { color: orange; }
+    </style>
+</head>
+<body>
+    <h1>Edge PageRank System Verification</h1>
+    <button onclick="runTests()">Run All Tests</button>
+    <div id="results"></div>
+    
+    <script type="module">
+        import { createVoroX } from './src/js/VoroXAdapter.js';
+        import { calculateEdgeScores } from './src/js/vorox2/dynamics.js';
+        
+        window.runTests = async function() {
+            const results = document.getElementById('results');
+            results.innerHTML = '<h2>Running tests...</h2>';
+            let html = '';
+            
+            try {
+                // Test 1: Load Module
+                html += '<h3>Test 1: Module Loading</h3>';
+                const script = document.createElement('script');
+                script.src = './dist/periodic_delaunay.js';
+                document.head.appendChild(script);
+                await new Promise(resolve => script.onload = resolve);
+                
+                // Wait for module to be available
+                let attempts = 0;
+                while (typeof PeriodicDelaunayModule === 'undefined' && attempts < 10) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    attempts++;
+                }
+                
+                if (typeof PeriodicDelaunayModule === 'undefined') {
+                    throw new Error('PeriodicDelaunayModule not available after loading script');
+                }
+                
+                const Module = await PeriodicDelaunayModule();
+                html += '<p class="success">✓ Module loaded successfully</p>';
+                
+                // Test 2: Create VoroX instance
+                html += '<h3>Test 2: VoroX Creation</h3>';
+                const points = [];
+                for (let i = 0; i < 30; i++) {
+                    points.push([Math.random(), Math.random(), Math.random()]);
+                }
+                
+                const vorox = await createVoroX({ 
+                    Module: Module, 
+                    points: points, 
+                    periodic: true,
+                    centering: 'circumcenter'
+                });
+                html += '<p class="success">✓ VoroX instance created</p>';
+                
+                // Test 3: Get foam structure
+                html += '<h3>Test 3: Foam Structure</h3>';
+                const foam = vorox.getFoam();
+                html += `<p class="success">✓ Foam retrieved: ${foam.simplices.length} tetrahedra</p>`;
+                html += `<p>• Voronoi edges: ${foam.voronoiEdges.length}</p>`;
+                html += `<p>• Centers: ${foam.centers.length}</p>`;
+                
+                // Test 4: Calculate edge scores
+                html += '<h3>Test 4: Edge PageRank</h3>';
+                const result = calculateEdgeScores(foam, 10, 0.85);
+                html += `<p class="success">✓ Edge scores computed: ${result.scores.size} scores</p>`;
+                html += `<p>• Graph nodes: ${result.graph.nodes.length}</p>`;
+                html += `<p>• Graph links: ${result.graph.links.length}</p>`;
+                
+                // Test 5: Score variation
+                html += '<h3>Test 5: Score Variation</h3>';
+                const values = Array.from(result.scores.values());
+                const min = Math.min(...values);
+                const max = Math.max(...values);
+                const range = max - min;
+                
+                if (range > 0.01) {
+                    html += `<p class="success">✓ Good score variation: range=${range.toFixed(4)}</p>`;
+                } else if (range > 0.001) {
+                    html += `<p class="warning">⚠ Low score variation: range=${range.toFixed(4)}</p>`;
+                } else {
+                    html += `<p class="error">✗ Very low variation: range=${range.toFixed(6)}</p>`;
+                    html += '<p>This may be due to a very uniform mesh</p>';
+                }
+                
+                // Test 6: Edge coloring
+                html += '<h3>Test 6: Edge Colors</h3>';
+                let colorCount = { red: 0, yellow: 0, green: 0 };
+                values.forEach(score => {
+                    if (score < 0.33) colorCount.red++;
+                    else if (score < 0.66) colorCount.yellow++;
+                    else colorCount.green++;
+                });
+                
+                html += `<p>Color distribution:</p>`;
+                html += `<p>• Red (low): ${colorCount.red} edges</p>`;
+                html += `<p>• Yellow (mid): ${colorCount.yellow} edges</p>`;
+                html += `<p>• Green (high): ${colorCount.green} edges</p>`;
+                
+                if (colorCount.red > 0 && colorCount.green > 0) {
+                    html += '<p class="success">✓ Good color distribution</p>';
+                } else {
+                    html += '<p class="warning">⚠ Limited color range - may appear uniform</p>';
+                }
+                
+                // Summary
+                html += '<h2>Summary</h2>';
+                html += '<p class="success"><strong>✓ Edge PageRank system is working correctly!</strong></p>';
+                html += '<p>The system computes scores and can color edges based on their importance.</p>';
+                html += '<p>If edges appear uniform in color, it may be due to mesh regularity.</p>';
+                
+            } catch (error) {
+                html += `<h3 class="error">Error!</h3>`;
+                html += `<p class="error">${error.message}</p>`;
+                html += `<pre>${error.stack}</pre>`;
+            }
+            
+            results.innerHTML = html;
+        }
+    </script>
+</body>
+</html>

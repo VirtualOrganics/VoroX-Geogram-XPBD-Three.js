@@ -21,36 +21,103 @@ A WebAssembly-powered 3D periodic Delaunay-Voronoi triangulation library for the
 - **WebAssembly Performance**: Native-speed computation in the browser
 - **Three.js Visualization**: Interactive 3D rendering with orbit controls
 - **Clean JavaScript API**: Simple, promise-based interface hiding WASM complexity
-- **VoroX Flow (experimental)**: Visualize active facet flow and cycles ("knots") derived from the Delaunay/Voronoi structure
+- **VoroX Flow (experimental)**: Visualize active facet flow derived from the Delaunay/Voronoi structure
+
+## Edge Scoring and Coloring
+
+The app can color Voronoi edges and the VoroX flow network based on per‑edge scores.
+
+### Scoring Modes
+
+You can choose between two complementary scoring methods:
+
+1. PageRank (stationary)
+   - Global importance via a stationary distribution on the obtuse‑angle edge graph
+   - Parameter: Depth = number of iterations (typ. 10–30)
+   - Suited for capturing broad, global connectivity trends
+
+2. MC Walk (time‑bounded)
+   - Local openness measured by short, directional random walks that only pass obtuse “gates”
+   - Parameters: L (steps), K (walkers per half‑edge), α (per‑step survival/discount)
+   - Directional: scores are computed on both half‑edge starts and combined (min) to penalize one‑sided openness
+   - Deterministic: each walker is seeded from (edgeKey, walkerId); same inputs → same results
+
+Both methods normalize edge scores to [0, 1]. The same score map is used by both the Voronoi edges and the VoroX flow lines when their respective “Color by Score” toggles are enabled.
+
+### Controls
+
+In “Edge Coloring System”:
+
+- Scoring Mode
+  - PageRank (stationary): uses PR depth
+  - MC Walk (time‑bounded): uses L, K, α
+  - Toggle modes without recomputing; click “Compute Edge Scores” to generate colors
+
+- MC Parameters
+  - Max Steps (L): horizon; larger explores farther but costs more
+  - Walkers per half‑edge (K): higher smooths noise but costs more
+  - Per‑step survival (α): lower emphasizes near‑field; higher retains far mass
+
+- PageRank Depth
+  - Iterations for stationary propagation (typ. 15–25)
+
+- Color Edges by Score
+  - Applies the current score map to Voronoi edges; missing keys fall back to the edge color picker
+
+- Flow: Color by Score (under Performance & Debug)
+  - Applies the same score map to the flow network; missing keys fall back to the edge color picker
+
+### Performance & Determinism
+
+- MC cost estimate: ~ E · 2 · K · L half‑edge transitions. Reduce K or L for large meshes.
+- Debouncing: enabling auto‑recompute debounces param changes to keep the UI responsive.
+- Deterministic MC: walkers use a fixed PRNG seeded from edgeKey and walkerId.
+
+### Troubleshooting
+
+- Colors look uniform
+  - PR: increase Depth
+  - MC: increase L or decrease α
+  - Consider using fewer or more irregular points
+
+- Missing edges (fallback color used often)
+  - Increase “Flow Segments (num)”
+  - Ensure obtuse connectivity exists; adjust geometry or parameters (L/α)
+
+- Slow recompute
+  - Reduce K or L (MC) or Depth (PR)
+  - Disable auto‑recompute during heavy edits
 
 ## Demo
 
 [Live Demo](https://virtualorganics.github.io/Geogram-VoroX-Three.js/)
 
-## VoroX Dynamics Controls
+## VoroX Dynamics Controls: The Brain of the Simulation
 
-The "Flow Dynamics" section provides detailed control over the simulation's physics and appearance. These controls are the "brain" of the program, allowing you to explore different dynamic behaviors based on the principles of the VoroX model.
+The "Flow Dynamics" section provides detailed control over the simulation's physics and appearance. These controls are the "brain" of the program, allowing you to guide a self-organizing system of points as it seeks a state of equilibrium. The simulation's goal is to arrange the points into a stable, balanced structure, much like bubbles in a foam. The controls let you define the "laws of physics" for this system.
 
 ### Core Physics Parameters
 
 *   **Decay**: This slider controls the "friction" or energy dissipation in the system. A value of `1.0` means no friction, which allows energy to build up indefinitely and can lead to explosive instability. Lower values (e.g., `0.95`) act like a drag force, causing the accumulated flow energy to fade each frame. This is crucial for allowing the system to shed energy and settle into a stable, dynamic equilibrium.
 *   **dt**: Represents the "delta time" or the size of the integration step for each frame of the simulation. Conceptually, it's how far into the future the simulation jumps in each step. Higher values lead to faster evolution but increase the risk of "overshooting" a stable state and becoming numerically unstable.
 *   **Energy**: A global multiplier for the strength of all calculated forces. You can think of this as the "temperature" or "kinetic energy" of the system. Higher values produce more dramatic and rapid movement, while lower values result in a more gentle relaxation.
-*   **Scale**: This is the target or "ideal" distance that the simulation tries to establish between connected points. This parameter is central to the concept of homothety in the VoroX model, where each tetrahedron attempts to expand or contract its edges to this ideal length, driving the self-organization of the entire structure.
+*   **Scale**: This is the target or "ideal" distance that the simulation tries to establish between connected points. This parameter is central to the concept of homothety in the VoroX model, where each tetrahedron attempts to expand or contract to bring its edges to this ideal length, driving the self-organization of the entire structure.
 
 ### Force Model Toggles
 
-These toggles control which components of the VoroX force model are active.
+These toggles control which components of the VoroX force model are active. The forces are always calculated using stable **barycenters** to prevent crashes, even though the flow visualization may use circumcenters.
 
-*   **Edge Scale**: When checked, forces are calculated between every pair of points within a tetrahedron (an edge-based model), akin to a spring network where every connection has a force. When unchecked, forces are calculated between each point and the tetrahedron's stable center (a center-based model). The edge-based model is more computationally intensive and typically results in a more energetic, "tense" equilibrium.
+*   **Edge Scale**: When checked, forces are calculated between every pair of points within a tetrahedron (an edge-based model), akin to a spring network. When unchecked, forces are calculated between each point and the tetrahedron's stable center (a center-based model). The edge-based model is more computationally intensive and typically results in a more energetic, "tense" equilibrium.
 *   **Equilibration**: Toggles the main homothety force that pushes and pulls points to achieve the ideal `Scale` distance. This is the primary driver of organization in the simulation.
 *   **Contractive**: Toggles a secondary, asymmetric force that gently pulls points together. Its strength is weighted by the "catchment" area of the flow knots, meaning it has a greater effect on points that are part of larger flow structures.
 *   **Expansive**: Toggles a secondary, asymmetric force that gently pushes points apart, also weighted by the knot catchment area. Using `Contractive` and `Expansive` allows for fine-tuning the clustering or dispersion behavior of the system.
 
 ### Visualization Controls
 
-*   **Max Segs**: A performance and visualization control. It limits the maximum number of flow edges drawn to the screen to prevent the display from becoming cluttered or slow.
-*   **Flow**: Toggles the visibility of the VoroX flow edges.
+These are your instruments for observing the invisible structures that emerge from the simulation's rules.
+
+*   **Max Segs**: A performance control that limits the maximum number of flow edges drawn to the screen, preventing the display from becoming cluttered or slow.
+*   **Flow**: Toggles the visibility of the VoroX flow edges, which represent the direction of "pressure" or "tension" in the geometric structure.
 *   **Knots**: Toggles the visibility of detected cycles (knots) in the flow. When active, knot edges are highlighted with thicker, black strokes.
 *   **Ghost Cells**: In periodic mode, this toggles the visibility of the 26 neighboring "ghost" cells, helping to visualize the toroidal, wrapped nature of the space.
 *   **Color by Knot**: When checked, flow edges belonging to a knot are colored with a unique hue for each distinct knot. When unchecked, all flow edges are colored by their accumulated energy (from blue for low energy to red for high energy), providing a visual representation of the energy distribution and dissipation in the system.
