@@ -40,9 +40,9 @@ export async function createVoroX({ Module, points, periodic=true, centering='ci
   let foam = buildFoam({ pointsArray, tetrahedra, isPeriodic: periodic, centering });
   let flow = Array.from({length: tetrahedra.length}, ()=>Array(4).fill(0.0)); // Flow accumulator
 
-  function step(dt, { edgeScale=true, scale=0.5, energy=5e-4, equilibration=true, contractive=false, expansive=true, recomputeEvery=5 }={}) {
+  function step(dt, { edgeScale=true, scale=0.5, energy=5e-4, equilibration=true, contractive=false, expansive=true, recomputeEvery=5, threshold=0.5 }={}, scores) {
     // Two clocks: fast dynamics each call; topology rebuild every `recomputeEvery` calls
-    const g = gradient(foam, edgeScale, scale, energy, equilibration, contractive, expansive);
+    const g = gradient(foam, scores, edgeScale, scale, energy, equilibration, contractive, expansive, threshold);
     pointsArray = integratePoints(pointsArray, g, dt, periodic);
     stepCounter = (stepCounter + 1) | 0;
     if (recomputeEvery < 1) recomputeEvery = 1;
