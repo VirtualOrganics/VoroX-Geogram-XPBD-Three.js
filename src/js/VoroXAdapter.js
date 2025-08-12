@@ -1,5 +1,6 @@
 import { buildFoam } from './vorox2/foam.js';
-import { gradient, integratePoints } from './vorox2/dynamics.js';
+import { gradient, integratePoints, createVerletSystem } from './vorox2/dynamics.js';
+import { buildVoronoiEdgeGraph } from './vorox2/edgeGraph.js';
 
 export async function createVoroX({ Module, points, periodic=true, centering='circumcenter' }) {
   if (!Module || typeof Module.compute_delaunay !== 'function') {
@@ -7,6 +8,7 @@ export async function createVoroX({ Module, points, periodic=true, centering='ci
   }
   let pointsArray = Array.isArray(points[0]) ? points : points.map(p=>[p[0],p[1],p[2]]);
   let stepCounter = 0;
+  let verlet = null;
   function triangulate() {
     const flat = new Float64Array(pointsArray.flat());
     const raw = Module.compute_delaunay(flat, pointsArray.length, periodic);
@@ -39,14 +41,147 @@ export async function createVoroX({ Module, points, periodic=true, centering='ci
   let tetrahedra = triangulate();
   let foam = buildFoam({ pointsArray, tetrahedra, isPeriodic: periodic, centering });
   let flow = Array.from({length: tetrahedra.length}, ()=>Array(4).fill(0.0)); // Flow accumulator
+  let lastStats = { affectedFaces: 0, meanDelta: 0, maxDelta: 0 };
 
-  function step(dt, { edgeScale=true, scale=0.5, energy=5e-4, equilibration=true, contractive=false, expansive=true, recomputeEvery=5, threshold=0.5 }={}, scores) {
-    // Two clocks: fast dynamics each call; topology rebuild every `recomputeEvery` calls
-    const g = gradient(foam, scores, edgeScale, scale, energy, equilibration, contractive, expansive, threshold);
-    pointsArray = integratePoints(pointsArray, g, dt, periodic);
+  function step(dt, options = {}, scores) {
+    const {
+      useEdgeMode = false,
+      useXPBD = false,
+      edgeScores = null,
+      edgeScale = false,
+      edge_scale: edge_scale_opt,
+      scale = 0.5,
+      energy = 5e-4,
+      equilibration = true,
+      contractive = false,
+      expansive = true,
+      recomputeEvery = 5,
+      threshold = 0.5,
+      useVerlet = false,
+      damping = 0.99,
+      // XPBD params
+      xpbdIters = 8,
+      xpbdGain = 0.1,
+      xpbdCompliance = 1e-4,
+      xpbdClamp = 0.005,
+      xpbdInvert = false,
+    } = options || {};
+
+    const gradOptions = {
+      useEdgeMode,
+      edgeScores,
+      edge_scale: (edge_scale_opt !== undefined ? edge_scale_opt : edgeScale),
+      scale,
+      energy,
+      equilibration,
+      contractive,
+      expansive,
+      threshold,
+    };
+
+    // reset per-step stats
+    lastStats = { affectedFaces: 0, meanDelta: 0, maxDelta: 0 };
+    let g = null;
+    if (useXPBD && useEdgeMode && edgeScores && edgeScores.size > 0) {
+      // XPBD face-area constraints driven by edge scores
+      let edgeToFace = foam.__edgeFaceMapCache;
+      if (!edgeToFace || edgeToFace.size === 0) {
+        const graph = buildVoronoiEdgeGraph(foam);
+        edgeToFace = graph.edgeToFace;
+        foam.__edgeFaceMapCache = edgeToFace;
+      }
+
+      const triArea = (a, b, c) => {
+        const ab = [b[0]-a[0], b[1]-a[1], b[2]-a[2]];
+        const ac = [c[0]-a[0], c[1]-a[1], c[2]-a[2]];
+        const cx = ab[1]*ac[2] - ab[2]*ac[1];
+        const cy = ab[2]*ac[0] - ab[0]*ac[2];
+        const cz = ab[0]*ac[1] - ab[1]*ac[0];
+        return 0.5 * Math.hypot(cx, cy, cz);
+      };
+      const centroid = (a, b, c) => [(a[0]+b[0]+c[0])/3, (a[1]+b[1]+c[1])/3, (a[2]+b[2]+c[2])/3];
+      const norm = (v)=>{ const n=Math.hypot(v[0],v[1],v[2])||1e-12; return [v[0]/n, v[1]/n, v[2]/n]; };
+      const wrap = (p)=> periodic ? [((p[0]%1)+1)%1, ((p[1]%1)+1)%1, ((p[2]%1)+1)%1] : p;
+
+      // Build faces list once with baseline area and target scale
+      const faces = [];
+      edgeScores.forEach((s, key) => {
+        const face = edgeToFace.get(key);
+        if (!face) return;
+        const [i,j,k] = face;
+        const a = pointsArray[i], b = pointsArray[j], c = pointsArray[k];
+        const A0 = triArea(a,b,c);
+        if (!(A0 > 0)) return;
+        const r = xpbdInvert ? (threshold - s) : (s - threshold);
+        const rClamped = Math.max(-1, Math.min(1, r));
+        const targetScale = 1 + xpbdGain * rClamped;
+        faces.push({ idx: [i,j,k], A0, targetScale });
+      });
+
+      const softness = 1 / (1 + 1e4 * Math.max(0, xpbdCompliance));
+      const perIterClamp = Math.max(0, xpbdClamp);
+      const iters = Math.max(1, (xpbdIters|0));
+      let sumDelta = 0;
+      let samples = 0;
+      let globalMax = 0;
+
+      for (let iter=0; iter<iters; iter++) {
+        for (const f of faces) {
+          const [i,j,k] = f.idx;
+          const a = pointsArray[i], b = pointsArray[j], c = pointsArray[k];
+          const Acur = triArea(a,b,c) || 1e-12;
+          const Atgt = f.A0 * f.targetScale;
+          const err = Atgt - Acur; // >0 means expand area
+          if (Math.abs(err) < 1e-8) continue;
+          const ctr = centroid(a,b,c);
+          const dirOut = [
+            norm([a[0]-ctr[0], a[1]-ctr[1], a[2]-ctr[2]]),
+            norm([b[0]-ctr[0], b[1]-ctr[1], b[2]-ctr[2]]),
+            norm([c[0]-ctr[0], c[1]-ctr[1], c[2]-ctr[2]])
+          ];
+          const sgn = err > 0 ? +1 : -1; // +1 expand: move outward; -1 contract: move inward
+          // Normalize error by baseline area to get a scale-free increment
+          const mag = softness * Math.min(perIterClamp, Math.abs(err) / (f.A0 + 1e-12));
+          // Per-face deltas (same magnitude per vertex)
+          const dA = mag, dB = mag, dC = mag;
+          const localMax = Math.max(dA, dB, dC);
+          if (localMax > 0) {
+            lastStats.affectedFaces += 1;
+            sumDelta += (dA + dB + dC) / 3;
+            samples += 1;
+            if (localMax > globalMax) globalMax = localMax;
+          }
+          // Apply equally to vertices
+          const apply = (p, d) => wrap([ p[0] + sgn * d[0] * mag, p[1] + sgn * d[1] * mag, p[2] + sgn * d[2] * mag ]);
+          pointsArray[i] = apply(a, dirOut[0]);
+          pointsArray[j] = apply(b, dirOut[1]);
+          pointsArray[k] = apply(c, dirOut[2]);
+        }
+      }
+      lastStats.meanDelta = samples ? (sumDelta / samples) : 0;
+      lastStats.maxDelta = globalMax;
+      // Diagnostics vector: zeros (not used by XPBD)
+      g = Array.from({length: pointsArray.length}, ()=>[0,0,0]);
+    } else {
+      // Gradient-based integration
+      g = gradient(foam, gradOptions);
+      if (useVerlet) {
+        if (!verlet || verlet.numPoints !== pointsArray.length || verlet.isPeriodic !== !!periodic) {
+          verlet = createVerletSystem(pointsArray.length, !!periodic);
+          verlet.initialize(pointsArray);
+        } else {
+          verlet.setPositions(pointsArray);
+        }
+        verlet.setForces(g);
+        verlet.setDamping(damping);
+        pointsArray = verlet.integrate(dt);
+      } else {
+        pointsArray = integratePoints(pointsArray, g, dt, periodic);
+      }
+    }
     stepCounter = (stepCounter + 1) | 0;
-    if (recomputeEvery < 1) recomputeEvery = 1;
-    if (stepCounter % recomputeEvery === 0) {
+    const recEvery = Math.max(1, (recomputeEvery|0));
+    if (stepCounter % recEvery === 0) {
       tetrahedra = triangulate();
     }
     // Always refresh centers/flow on current points (using latest or cached tets)
@@ -61,6 +196,7 @@ export async function createVoroX({ Module, points, periodic=true, centering='ci
     setFlow: (f) => { flow = f; },
     getPoints: () => pointsArray,
     setPeriodic: (p)=>{ periodic = !!p; tetrahedra = triangulate(); foam = buildFoam({ pointsArray, tetrahedra, isPeriodic: periodic, centering }); },
+    getLastStepStats: () => lastStats,
   };
 }
 

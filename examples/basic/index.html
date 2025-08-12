@@ -208,6 +208,37 @@
             <input type="range" id="dynDamping" min="0.8" max="1.0" step="0.01" value="0.99">
             <input type="number" id="dynDampingNum" min="0.8" max="1.0" step="0.01" value="0.99">
         </div>
+
+        <!-- Two-Phase Cadence + XPBD Controls -->
+        <div class="section-header">Two-Phase Cadence + XPBD</div>
+        <div class="control-group row-2" title="How many Physical steps to run per Brain recompute">
+            <label for="physPerBrain">Physics per Brain</label>
+            <input type="number" id="physPerBrain" min="1" max="50" step="1" value="10">
+        </div>
+        <div class="control-group row-2" title="Iterations of XPBD updates per Physical step">
+            <label for="xpbdIters">XPBD iterations</label>
+            <input type="number" id="xpbdIters" min="1" max="50" step="1" value="8">
+        </div>
+        <div class="control-group row-2" title="Deformation gain k (scale change per unit score delta)">
+            <label for="xpbdGain">Gain k</label>
+            <input type="number" id="xpbdGain" min="0" max="1" step="0.01" value="0.10">
+        </div>
+        <div class="control-group row-2" title="Compliance (softness) – higher is softer">
+            <label for="xpbdCompliance">Compliance</label>
+            <input type="number" id="xpbdCompliance" min="0" max="0.01" step="0.0001" value="0.0001">
+        </div>
+        <div class="control-group row-2" title="Clamp per-vertex displacement per iteration">
+            <label for="xpbdClamp">Clamp (per iter)</label>
+            <input type="number" id="xpbdClamp" min="0" max="0.01" step="0.0005" value="0.005">
+        </div>
+        <div class="control-group row-2" title="Invert response: use (t - s) instead of (s - t)">
+            <label for="xpbdInvert">Invert response</label>
+            <input type="checkbox" id="xpbdInvert">
+        </div>
+        <div class="control-group row-2" title="Minimum time between Brain recomputes (0 = no limit)">
+            <label for="brainCooldownMs">Brain cooldown (ms)</label>
+            <input type="number" id="brainCooldownMs" min="0" max="1000" step="10" value="0">
+        </div>
         
         <!-- PageRank Edge Coloring System -->
         <hr>
@@ -463,6 +494,9 @@
         let lastScoreParams = null;   // params used for last compute
         let lastScoreTimestamp = null;// Date.now()
         let lastFoamHash = null;      // topology hash to avoid stale reuse
+        let brainLastTimeMs = 0;      // ms since epoch
+        let physStepsSinceBrain = 0;  // physical steps since last brain recompute
+        let runPhase = 'physical';    // 'brain' | 'physical'
         // Discrete color mapping cache/state
         let colorSteps = 5;
         let paletteId = 'seq_ryg';
@@ -1803,45 +1837,16 @@
                 const edgeResult = calculateEdgeScores(foam, depth, 0.85);
                 lastEdgeScores = edgeResult.scores;
                 
-                // Compute gradient with edge-based forces
-                const gradientOpts = {
+                // Adapter owns integration; pass options (with edge scores)
+                const stepOptions = {
+                    ...opts,
                     useEdgeMode: true,
                     edgeScores: lastEdgeScores,
-                    edge_scale: opts.edgeScale,
-                    scale: opts.scale,
-                    energy: opts.energy,
-                    equilibration: opts.equilibration,
-                    contractive: opts.contractive,
-                    expansive: opts.expansive,
-                    threshold: opts.threshold,
-                    searchDepth: depth
+                    edge_scale: opts.edgeScale
                 };
-                
-                const forces = gradient(foam, gradientOpts);
-                
-                // Use Verlet or Euler integration
-                if (opts.useVerlet) {
-                    // Initialize Verlet integrator if needed
-                    if (!verletIntegrator || verletIntegrator.numPoints !== foam.points.length) {
-                        verletIntegrator = createVerletSystem(foam.points.length, foam.isPeriodic);
-                        verletIntegrator.initialize(foam.points);
-                    }
-                    
-                    // Update Verlet with current positions and forces
-                    verletIntegrator.setPositions(foam.points);
-                    verletIntegrator.setForces(forces);
-                    verletIntegrator.setDamping(opts.damping);
-                    
-                    // Integrate
-                    const newPoints = verletIntegrator.integrate(dt);
-                    voroxInstance.setPoints(newPoints);
-                } else {
-                    // Use legacy Euler integration
-                    const newPoints = integratePoints(foam.points, forces, dt, foam.isPeriodic);
-                    voroxInstance.setPoints(newPoints);
-                }
+                voroxInstance.step(dt, stepOptions, null);
             } else {
-                // Legacy tetrahedra-based scoring
+                // Legacy tetrahedra-based scoring; adapter integrates
                 scores = calculateScores(foam, depth);
                 voroxInstance.step(dt, opts, scores);
             }
@@ -2152,38 +2157,121 @@
                 }
                 lastTickTime = now - (delta % frameInterval);
 
-                // --- Simulation Step ---
+                // --- Two-Phase Brain/Physical Loop ---
                 const dt = parseFloat(document.getElementById('dynDtNum').value);
                 const options = getDynamicsOptions();
                 const depth = parseInt(document.getElementById('dynSearchDepthNum').value);
-                scores = calculateScores(voroxInstance.getFoam(), depth);
-                const g = voroxInstance.step(dt, options, scores);
-                
-                // --- Decay and Accumulate Flow ---
-                const decayFactor = parseFloat(document.getElementById('dynDecayNum').value);
-                let currentFlow = voroxInstance.getFlow();
-                const numTets = voroxInstance.getFoam().simplices.length;
-                if (currentFlow.length !== numTets) {
-                    currentFlow = Array.from({length: numTets}, ()=>Array(4).fill(0.0));
-                }
-                for (let i=0; i<currentFlow.length; i++) {
-                    for (let j=0; j<4; j++) {
-                        currentFlow[i][j] *= decayFactor;
-                    }
-                }
-                for (let i=0; i<g.length; i++) {
-                    const norm = Math.hypot(g[i][0], g[i][1], g[i][2]);
-                    const tet = voroxInstance.getFoam().simplices.find(t => t.includes(i));
-                    if (tet) {
-                        const tetIdx = voroxInstance.getFoam().simplices.indexOf(tet);
-                        if (tetIdx > -1 && tetIdx < currentFlow.length) {
-                           for (let j=0; j<4; j++) currentFlow[tetIdx][j] += norm * 0.25;
+                const physPerBrain = Math.max(1, Math.min(50, parseInt(document.getElementById('physPerBrain')?.value || '5')));
+                const brainCooldownMs = Math.max(0, parseInt(document.getElementById('brainCooldownMs')?.value || '0'));
+
+                let g = null; // gradient from physical step (for flow accumulation)
+
+                if (document.getElementById('dynUseEdgeMode').checked) {
+                    // Edge mode with cadence
+                    const nowMs = performance.now();
+                    const canBrain = (brainCooldownMs === 0) || ((nowMs - brainLastTimeMs) >= brainCooldownMs);
+                    if (physStepsSinceBrain < physPerBrain || !canBrain) {
+                        // Physical step
+                        const stepOptions = {
+                            ...options,
+                            useEdgeMode: true,
+                            useXPBD: true,
+                            edgeScores: lastEdgeScores,
+                            edge_scale: options.edgeScale,
+                            xpbdIters: Math.max(1, Math.min(50, parseInt(document.getElementById('xpbdIters')?.value || '8'))),
+                            xpbdGain: Math.max(0, Math.min(1, parseFloat(document.getElementById('xpbdGain')?.value || '0.10'))),
+                            xpbdCompliance: Math.max(0, Math.min(0.01, parseFloat(document.getElementById('xpbdCompliance')?.value || '0.0001'))),
+                            xpbdClamp: Math.max(0, Math.min(0.01, parseFloat(document.getElementById('xpbdClamp')?.value || '0.005'))),
+                            xpbdInvert: !!document.getElementById('xpbdInvert')?.checked,
+                        };
+                        if (!lastEdgeScores || lastEdgeScores.size === 0) {
+                            setStatus('Waiting for Brain scores… running equilibration only', true);
+                        }
+                        g = voroxInstance.step(dt, stepOptions, null);
+                        physStepsSinceBrain++;
+                        runPhase = 'physical';
+                    } else {
+                        // Brain recompute
+                        try {
+                            const foam = voroxInstance.getFoam();
+                            let edgeResult;
+                            if (document.getElementById('scoreModeMC').checked) {
+                                const L = Math.max(2, Math.min(32, parseInt(document.getElementById('mcStepsL').value || '12')));
+                                let K = Math.max(8, Math.min(256, parseInt(document.getElementById('mcWalkersK').value || '64')));
+                                K = Math.round(K/8)*8;
+                                const alpha = Math.max(0.75, Math.min(0.98, parseFloat((document.getElementById('mcAlpha').value || '0.90').toString().replace(',', '.'))));
+                                edgeResult = calculateEdgeScoresMonteCarlo(foam, L, K, alpha);
+                                lastScoreMethod = 'mc';
+                                lastScoreParams = { L, K, alpha };
+                            } else {
+                                const depthNow = parseInt(document.getElementById('dynSearchDepthNum').value) || 15;
+                                edgeResult = calculateEdgeScores(foam, depthNow, 0.85);
+                                lastScoreMethod = 'pagerank';
+                                lastScoreParams = { depth: depthNow, damping: 0.85 };
+                            }
+                            lastEdgeScores = edgeResult.scores;
+                            lastScoreTimestamp = Date.now();
+                            // Update foam hash for cache tracking if helper exists
+                            try { if (typeof buildFoamHash === 'function') { lastFoamHash = buildFoamHash(foam); } } catch {}
+                            physStepsSinceBrain = 0;
+                            brainLastTimeMs = nowMs;
+                            runPhase = 'brain';
+                            renderLegend();
+                            setStatus(`Brain recompute done (${lastEdgeScores?.size||0} edges)`, true);
+                        } catch (e) {
+                            console.error('Brain recompute failed:', e);
+                            setStatus('Brain recompute failed; using previous scores', false);
+                            // Fall through: do a physical step instead to avoid stalling
+                            const stepOptions = { ...options, useEdgeMode: true, edgeScores: lastEdgeScores, edge_scale: options.edgeScale };
+                            g = voroxInstance.step(dt, stepOptions, null);
+                            physStepsSinceBrain++;
+                            runPhase = 'physical';
                         }
                     }
+                } else {
+                    // Legacy mode: compute per-tet scores and physical step each frame
+                    scores = calculateScores(voroxInstance.getFoam(), depth);
+                    g = voroxInstance.step(dt, options, scores);
+                    runPhase = 'physical';
                 }
-                voroxInstance.setFlow(currentFlow);
+                
+                // --- Decay and Accumulate Flow (only when we have a gradient) ---
+                if (g) {
+                    const decayFactor = parseFloat(document.getElementById('dynDecayNum').value);
+                    let currentFlow = voroxInstance.getFlow();
+                    const numTets = voroxInstance.getFoam().simplices.length;
+                    if (currentFlow.length !== numTets) {
+                        currentFlow = Array.from({length: numTets}, ()=>Array(4).fill(0.0));
+                    }
+                    for (let i=0; i<currentFlow.length; i++) {
+                        for (let j=0; j<4; j++) {
+                            currentFlow[i][j] *= decayFactor;
+                        }
+                    }
+                    for (let i=0; i<g.length; i++) {
+                        const norm = Math.hypot(g[i][0], g[i][1], g[i][2]);
+                        const tet = voroxInstance.getFoam().simplices.find(t => t.includes(i));
+                        if (tet) {
+                            const tetIdx = voroxInstance.getFoam().simplices.indexOf(tet);
+                            if (tetIdx > -1 && tetIdx < currentFlow.length) {
+                               for (let j=0; j<4; j++) currentFlow[tetIdx][j] += norm * 0.25;
+                            }
+                        }
+                    }
+                    voroxInstance.setFlow(currentFlow);
+                }
 
                 updateScene();
+                if (runPhase === 'physical' && document.getElementById('dynUseEdgeMode').checked) {
+                    const n = Math.max(1, Math.min(50, parseInt(document.getElementById('physPerBrain')?.value || '5')));
+                    const stats = (typeof voroxInstance.getLastStepStats === 'function') ? voroxInstance.getLastStepStats() : null;
+                    if (stats) {
+                        const msg = `Physical ${physStepsSinceBrain}/${n} — faces: ${stats.affectedFaces}, mean Δ: ${stats.meanDelta.toFixed(4)}, max Δ: ${stats.maxDelta.toFixed(4)}`;
+                        setStatus(msg, true);
+                    } else {
+                        setStatus(`Physical ${physStepsSinceBrain}/${n}`, true);
+                    }
+                }
                 frameCounter++;
                 runBtn.textContent = `Stop (${frameCounter})`;
             }
@@ -2195,6 +2283,37 @@
                     lastTickTime = performance.now();
                     runBtn.style.backgroundColor = '#dc3545';
                     runBtn.textContent = 'Stop';
+                    // On run start: reset cadence and force initial Brain in edge mode
+                    physStepsSinceBrain = 0;
+                    if (document.getElementById('dynUseEdgeMode').checked && voroxInstance) {
+                        try {
+                            const foam = voroxInstance.getFoam();
+                            let edgeResult;
+                            if (document.getElementById('scoreModeMC').checked) {
+                                const L = Math.max(2, Math.min(32, parseInt(document.getElementById('mcStepsL').value || '12')));
+                                let K = Math.max(8, Math.min(256, parseInt(document.getElementById('mcWalkersK').value || '64')));
+                                K = Math.round(K/8)*8;
+                                const alpha = Math.max(0.75, Math.min(0.98, parseFloat((document.getElementById('mcAlpha').value || '0.90').toString().replace(',', '.'))));
+                                edgeResult = calculateEdgeScoresMonteCarlo(foam, L, K, alpha);
+                                lastScoreMethod = 'mc';
+                                lastScoreParams = { L, K, alpha };
+                            } else {
+                                const depthNow = parseInt(document.getElementById('dynSearchDepthNum').value) || 15;
+                                edgeResult = calculateEdgeScores(foam, depthNow, 0.85);
+                                lastScoreMethod = 'pagerank';
+                                lastScoreParams = { depth: depthNow, damping: 0.85 };
+                            }
+                            lastEdgeScores = edgeResult.scores;
+                            lastScoreTimestamp = Date.now();
+                            try { if (typeof buildFoamHash === 'function') { lastFoamHash = buildFoamHash(foam); } } catch {}
+                            brainLastTimeMs = performance.now();
+                            renderLegend();
+                            setStatus(`Brain initialized (${lastEdgeScores?.size||0} edges)`, true);
+                        } catch (e) {
+                            console.error('Initial Brain compute failed:', e);
+                            setStatus('Initial Brain compute failed; will proceed with equilibration', false);
+                        }
+                    }
                     tick();
                 } else {
                     cancelAnimationFrame(rafId);
