@@ -1,6 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <!-- Redirect root demo to Live Demo in docs/ to avoid stale page -->
+    <meta http-equiv="refresh" content="0; url=docs/index.html">
+    <script>
+        (function(){
+            try {
+                var target = 'docs/index.html' + (window.location.search || '') + (window.location.hash || '');
+                if (!/\/docs\//.test(window.location.pathname)) {
+                    window.location.replace(target);
+                }
+            } catch (e) { /* noop */ }
+        })();
+    </script>
     <meta charset="UTF-8">
     <title>3D Periodic Delaunay-Voronoi - Three.js Visualization</title>
     <script type="importmap">
