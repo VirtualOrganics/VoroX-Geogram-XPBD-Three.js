@@ -1040,6 +1040,8 @@
                     setStatus('Threshold set to balanced split', true); updateScene(); renderLegend();
                 };
             }
+            // expose for outer-scope callers
+            window.renderLegend = renderLegend;
 
             if (showVoronoiFaces) {
                 const faceColorHex = document.getElementById('voronoiFaceColor').value;
