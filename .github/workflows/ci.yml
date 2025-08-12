@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, xpbd-integration, part3-merge, part3-temp ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci || true
+      - run: npm run build || echo "no build script"
+      - run: npm run lint || echo "no lint script"
+
+

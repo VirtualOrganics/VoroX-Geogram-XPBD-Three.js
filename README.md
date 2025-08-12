@@ -119,6 +119,14 @@ These are your instruments for observing the invisible structures that emerge fr
 *   **Color by Knot**: When checked, flow edges belonging to a knot are colored with a unique hue for each distinct knot. When unchecked, all flow edges are colored by their accumulated energy (from blue for low energy to red for high energy), providing a visual representation of the energy distribution and dissipation in the system.
 
 ## Quick Start
+### Two-phase loop (Brain → Physical×N)
+- Brain (PR/MC) computes edge scores and updates the legend; now optionally offloaded to a Web Worker for smoother UI.
+- Physical runs XPBD per-face constraints for N steps using the last Brain scores. Controls: physPerBrain, xpbdMaxScale, damping, etc.
+
+### Worker offload (experimental)
+- The Brain step (adjacency + PR/MC) can run in `src/js/workers/brain.worker.js`.
+- The page sends typed array data for centers, voronoiEdges and facetPairs; the worker returns score arrays and basic statistics.
+
 
 ### Using the Library
 
