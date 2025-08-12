@@ -1669,6 +1669,25 @@
             }
         }
         
+        // Centralized dynamics options getter (moved above step for scope/ordering)
+        function getDynamicsOptions() {
+            return {
+                edgeScale: document.getElementById('dynEdgeScale').checked,
+                scale: parseFloat(document.getElementById('dynScaleNum').value),
+                energy: parseFloat(document.getElementById('dynEnergyNum').value),
+                equilibration: document.getElementById('dynEquilibration').checked,
+                contractive: document.getElementById('dynContractive').checked,
+                expansive: document.getElementById('dynExpansive').checked,
+                recomputeEvery: 5,
+                threshold: parseFloat(document.getElementById('dynThresholdNum').value) || 0.5,
+                useEdgeMode: document.getElementById('dynUseEdgeMode').checked,
+                useVerlet: document.getElementById('dynUseVerlet').checked,
+                damping: parseFloat(document.getElementById('dynDampingNum').value) || 0.99
+            };
+        }
+        // TEMP: expose for console validation; remove after verifying
+        window.getDynamicsOptions = getDynamicsOptions;
+
         function step() {
             if (!voroxInstance) return;
             const dt = parseNumInput('dynDt', 0.02);
@@ -1940,23 +1959,6 @@
             
             const runBtn = document.getElementById('runBtn');
             let runOn = false;
-
-            // Centralized dynamics options getter
-            function getDynamicsOptions() {
-                return {
-                    edgeScale: document.getElementById('dynEdgeScale').checked,
-                    scale: parseFloat(document.getElementById('dynScaleNum').value),
-                    energy: parseFloat(document.getElementById('dynEnergyNum').value),
-                    equilibration: document.getElementById('dynEquilibration').checked,
-                    contractive: document.getElementById('dynContractive').checked,
-                    expansive: document.getElementById('dynExpansive').checked,
-                    recomputeEvery: 5,
-                    threshold: parseFloat(document.getElementById('dynThresholdNum').value) || 0.5,
-                    useEdgeMode: document.getElementById('dynUseEdgeMode').checked,
-                    useVerlet: document.getElementById('dynUseVerlet').checked,
-                    damping: parseFloat(document.getElementById('dynDampingNum').value) || 0.99
-                };
-            }
 
             // Function to sync slider and number input
             function setupSliderSync(sliderId, numberId) {
