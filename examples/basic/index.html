@@ -105,6 +105,15 @@
             width: 80px;
             text-align: center;
         }
+        /* Legend panel */
+        .legend-panel { margin-top: 8px; padding: 8px; background: #f5f5f5; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .legend-title { font-weight: 700; margin-bottom: 6px; }
+        .legend-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0; }
+        .legend-left { display: flex; align-items: center; gap: 8px; }
+        .legend-swatch { width: 18px; height: 12px; border: 1px solid #999; border-radius: 3px; display: inline-block; }
+        .legend-range { font-size: 13px; }
+        .legend-count { font-size: 12px; opacity: 0.75; }
+        .legend-footer { margin-top: 6px; font-size: 12px; opacity: 0.85; }
     </style>
 </head>
 <body>
@@ -413,6 +422,8 @@
             <span id="statsCore">Loading...</span><br>
             <span id="statsPerf"></span>
         </div>
+        <!-- Legend Panel -->
+        <div id="legendPanel" class="legend-panel"></div>
         </div>
     </div>
     
@@ -492,9 +503,11 @@
             // Hide/Show controls toggle
             const toggleBtn = document.getElementById('controls-toggle');
             const controlsPanel = document.getElementById('controls');
+            const legendPanel = document.getElementById('legendPanel');
             toggleBtn.addEventListener('click', () => {
                 controlsPanel.classList.toggle('hidden');
                 toggleBtn.textContent = controlsPanel.classList.contains('hidden') ? 'show' : 'hide';
+                if (legendPanel) legendPanel.style.display = controlsPanel.classList.contains('hidden') ? 'none' : '';
             });
             
             // Lighting
@@ -938,6 +951,94 @@
                 if(quantization==='quantile' && cachedThresholds){ bin=binarySearchThresholds(cachedThresholds, s); }
                 else { bin=Math.floor(s*colorSteps - 1e-8); if(bin<0) bin=0; if(bin>=colorSteps) bin=colorSteps-1; }
                 return cachedStepColors[bin].clone();
+            }
+
+            // --- Legend computation and rendering ---
+            function computeLegendBins() {
+                if (!lastEdgeScores || lastEdgeScores.size === 0) return null;
+                ensureColorMappingCache();
+                const edges = [0, ...(cachedThresholds||[]), 1];
+                const counts = new Array(colorSteps).fill(0);
+                const total = lastEdgeScores.size;
+                for (const s of lastEdgeScores.values()) {
+                    let b;
+                    if (quantization === 'quantile' && cachedThresholds) b = binarySearchThresholds(cachedThresholds, s);
+                    else { b = Math.floor(s*colorSteps - 1e-8); if (b<0) b=0; if (b>=colorSteps) b=colorSteps-1; }
+                    counts[b]++;
+                }
+                const percents = counts.map(c => total ? (c/total) : 0);
+                return { edges, counts, percents, total };
+            }
+            function legendRangeLabel(i, edges) {
+                if (quantization === 'quantile') {
+                    const p0 = Math.round((i   / colorSteps)*100);
+                    const p1 = Math.round(((i+1)/ colorSteps)*100);
+                    return `P${p0}–P${p1}`;
+                }
+                const a = edges[i];
+                const b = edges[i+1];
+                return `${a.toFixed(2)}–${b.toFixed(2)}`;
+            }
+            function computeBalance(percents) {
+                if (!percents) return 0;
+                const u = 1/colorSteps;
+                let sum = 0; for (const p of percents) sum += Math.abs(p - u);
+                const denom = 2*(1 - u);
+                return Math.max(0, Math.min(1, 1 - (sum/denom)));
+            }
+            function renderLegend() {
+                const panel = document.getElementById('legendPanel'); if (!panel) return;
+                if (!lastEdgeScores || lastEdgeScores.size === 0) { panel.innerHTML = ''; return; }
+                ensureColorMappingCache();
+                const bins = computeLegendBins(); if (!bins) { panel.innerHTML=''; return; }
+                const { edges, counts, percents, total } = bins;
+                const thr = parseFloat(document.getElementById('dynThresholdNum')?.value || '0.5');
+                // determine bin index for threshold upper split
+                let thrBin = 0; if (quantization==='quantile' && cachedThresholds) thrBin = binarySearchThresholds(cachedThresholds, thr); else { thrBin = Math.floor(thr*colorSteps - 1e-8); if (thrBin<0) thrBin=0; if (thrBin>=colorSteps) thrBin=colorSteps-1; }
+                let html = '<div class="legend-title">Edge Weights</div>';
+                for (let i=0;i<colorSteps;i++) {
+                    const col = `#${cachedStepColors[i].getHexString()}`;
+                    const range = legendRangeLabel(i, edges);
+                    const cnt = counts[i];
+                    const pct = Math.round(percents[i]*100);
+                    const dim = (i<=thrBin && document.getElementById('dynContractive')?.checked) || (i>thrBin && document.getElementById('dynExpansive')?.checked) ? '' : '';
+                    html += `<div class="legend-row" style="opacity:${(colorSteps>1)?1:1}"><div class="legend-left"><span class="legend-swatch" style="background:${col}"></span><span class="legend-range">${range}</span></div><div class="legend-count">(${cnt}${total?`, ${pct}%`:''})</div></div>`;
+                }
+                const balance = Math.round(computeBalance(percents)*100);
+                html += `<div class="legend-footer">Balance: ${balance}%</div>`;
+                html += `<div style="display:flex; gap:6px; margin-top:6px;"><button id="legendMedianBtn" style="flex:1">Median (50%)</button><button id="legendBalanceBtn" style="flex:1">Balance split</button></div>`;
+                panel.innerHTML = html;
+                // Click handlers
+                const rows = panel.querySelectorAll('.legend-row');
+                rows.forEach((row, i) => {
+                    row.onclick = () => {
+                        // set threshold to upper edge of bin i
+                        const upper = edges[i+1];
+                        const thrInput = document.getElementById('dynThresholdNum');
+                        const thrSlider = document.getElementById('dynThreshold');
+                        if (thrInput) thrInput.value = upper.toFixed(2);
+                        if (thrSlider) thrSlider.value = upper.toFixed(2);
+                        setStatus(`Threshold set to ${upper.toFixed(2)} via legend`, true);
+                        updateScene(); renderLegend();
+                    };
+                });
+                const medianBtn = document.getElementById('legendMedianBtn');
+                if (medianBtn) medianBtn.onclick = () => {
+                    let m=0.5; if (quantization==='quantile' && cachedThresholds && cachedThresholds.length) { m = cachedThresholds[Math.floor(cachedThresholds.length/2)] || 0.5; }
+                    const thrInput = document.getElementById('dynThresholdNum'); const thrSlider=document.getElementById('dynThreshold');
+                    if (thrInput) thrInput.value = m.toFixed(2); if (thrSlider) thrSlider.value=m.toFixed(2);
+                    setStatus('Threshold set to median', true); updateScene(); renderLegend();
+                };
+                const balanceBtn = document.getElementById('legendBalanceBtn');
+                if (balanceBtn) balanceBtn.onclick = () => {
+                    // choose split minimizing |left% - right%|
+                    const cum=[]; let acc=0; for (let i=0;i<percents.length;i++){ acc+=percents[i]; cum.push(acc); }
+                    let bestI=0, bestD=1e9; for (let i=0;i<cum.length;i++){ const d=Math.abs(cum[i]-0.5); if (d<bestD){ bestD=d; bestI=i; } }
+                    const t = edges[bestI+1];
+                    const thrInput = document.getElementById('dynThresholdNum'); const thrSlider=document.getElementById('dynThreshold');
+                    if (thrInput) thrInput.value = t.toFixed(2); if (thrSlider) thrSlider.value=t.toFixed(2);
+                    setStatus('Threshold set to balanced split', true); updateScene(); renderLegend();
+                };
             }
 
             if (showVoronoiFaces) {
@@ -1638,6 +1739,7 @@
                 const numLinks = foam.facetPairs.flat().filter(Boolean).length / 2; // Each pair is a link, counted twice.
                 statsCore.textContent = `VoroX: ${foam.simplices.length} tets, ${numLinks} links, periodic:${foam.isPeriodic}`;
             }
+                renderLegend();
             
             // Auto-compute edge scores if edge coloring is enabled
             if (document.getElementById('colorEdgesByScore').checked && (!lastEdgeScores || lastEdgeScores.size === 0)) {
@@ -1904,6 +2006,7 @@
                 
                 overlayEl.style.display = 'none';
                 updateScene();
+                renderLegend();
             });
             
             // Quick Color Demo button
@@ -1955,6 +2058,7 @@
                 
                 // 8. Update display
                 updateScene();
+                renderLegend();
             });
             
             const runBtn = document.getElementById('runBtn');
@@ -2216,6 +2320,7 @@
                         lastEdgeScores = null;
                     }
                     updateScene();
+                    renderLegend();
                 });
             });
 
