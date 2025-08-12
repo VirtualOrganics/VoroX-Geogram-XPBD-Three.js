@@ -410,11 +410,15 @@ export function calculateEdgeScoresMC(foam, L = 8, K = 64, alpha = 0.9, options 
 export function computeEdgeBasedForces(foam, edgeScores, threshold, contractive, expansive, strength = 0.1) {
     const forces = Array.from({length: foam.points.length}, () => [0, 0, 0]);
     
-    // Build the edge graph to get face mappings
-    const edgeGraph = buildVoronoiEdgeGraph(foam);
+    // Use cached edge->face map on foam if available; else build once and cache
+    if (!foam.__edgeFaceMapCache) {
+        const g = buildVoronoiEdgeGraph(foam);
+        foam.__edgeFaceMapCache = g.edgeToFace; // Map edgeKey -> face [i,j,k]
+    }
+    const edgeToFace = foam.__edgeFaceMapCache;
     
     edgeScores.forEach((score, edgeKey) => {
-        const face = edgeGraph.edgeToFace.get(edgeKey);
+        const face = edgeToFace.get(edgeKey);
         if (!face) return;
         
         // Determine if we should contract or expand this face
@@ -448,9 +452,16 @@ export function computeEdgeBasedForces(foam, edgeScores, threshold, contractive,
             
             // Normalize and scale
             const mag = Math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2) || 1;
-            forces[vertIdx][0] += scaleFactor * direction[0] / mag;
-            forces[vertIdx][1] += scaleFactor * direction[1] / mag;
-            forces[vertIdx][2] += scaleFactor * direction[2] / mag;
+            // Clamp per-vertex contribution to avoid spikes
+            const dx = scaleFactor * direction[0] / mag;
+            const dy = scaleFactor * direction[1] / mag;
+            const dz = scaleFactor * direction[2] / mag;
+            const maxStep = 0.05; // conservative clamp before integrator
+            const n = Math.hypot(dx,dy,dz) || 0;
+            const k = n > maxStep ? (maxStep / n) : 1.0;
+            forces[vertIdx][0] += k*dx;
+            forces[vertIdx][1] += k*dy;
+            forces[vertIdx][2] += k*dz;
         });
     });
     

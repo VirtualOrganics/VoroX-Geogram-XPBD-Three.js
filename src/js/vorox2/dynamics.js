@@ -133,12 +133,11 @@ export function gradient(foam, options = {}) {
 
     // Step 2: Apply targeted contractive/expansive forces
     if (useEdgeMode && (contractive || expansive)) {
-        // Use edge-based PageRank scores
+        // Use cached edge scores (PR or MC); do not recompute here
         let scores = edgeScores;
         if (!scores) {
-            // Compute edge scores if not provided
-            const result = calculateEdgeScores(foam, searchDepth);
-            scores = result.scores;
+            // No scores provided; skip gracefully
+            return grad;
         }
         
         // Apply edge-based deformation forces
