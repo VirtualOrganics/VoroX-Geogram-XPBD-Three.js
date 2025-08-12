@@ -1,4 +1,5 @@
-import { buildFoam } from './vorox2/foam.js';
+import { buildFoam, buildFoamHash } from './vorox2/foam.js';
+import { ensureCaches, clearCache } from './vorox2/dual.js';
 import { gradient, integratePoints } from './vorox2/dynamics.js';
 
 export async function createVoroX({ Module, points, periodic=true, centering='circumcenter' }) {
@@ -38,6 +39,7 @@ export async function createVoroX({ Module, points, periodic=true, centering='ci
   }
   let tetrahedra = triangulate();
   let foam = buildFoam({ pointsArray, tetrahedra, isPeriodic: periodic, centering });
+  let foamHash = buildFoamHash(foam);
   let flow = Array.from({length: tetrahedra.length}, ()=>Array(4).fill(0.0)); // Flow accumulator
 
   function step(dt, { edgeScale=true, scale=0.5, energy=5e-4, equilibration=true, contractive=false, expansive=true, recomputeEvery=5, threshold=0.5 }={}, scores) {
@@ -50,17 +52,25 @@ export async function createVoroX({ Module, points, periodic=true, centering='ci
       tetrahedra = triangulate();
     }
     // Always refresh centers/flow on current points (using latest or cached tets)
+    const prevHash = foamHash;
     foam = buildFoam({ pointsArray, tetrahedra, isPeriodic: periodic, centering });
+    foamHash = buildFoamHash(foam);
+    if (foamHash !== prevHash) {
+      // Invalidate caches keyed by previous hash
+      clearCache(prevHash);
+    }
     return g; // Return the calculated gradient
   }
 
   return {
     step,
     getFoam: () => foam,
+    getFoamHash: () => foamHash,
+    primeDualCaches: () => ensureCaches(foam, foamHash),
     getFlow: () => flow,
     setFlow: (f) => { flow = f; },
     getPoints: () => pointsArray,
-    setPeriodic: (p)=>{ periodic = !!p; tetrahedra = triangulate(); foam = buildFoam({ pointsArray, tetrahedra, isPeriodic: periodic, centering }); },
+    setPeriodic: (p)=>{ periodic = !!p; tetrahedra = triangulate(); foam = buildFoam({ pointsArray, tetrahedra, isPeriodic: periodic, centering }); foamHash = buildFoamHash(foam); },
   };
 }
 

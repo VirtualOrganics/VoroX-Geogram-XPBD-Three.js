@@ -99,4 +99,27 @@ export function buildFoam({ pointsArray, tetrahedra, isPeriodic, centering='cent
   };
 }
 
+// Lightweight topology/content signature; avoids full recompute when unchanged
+export function buildFoamHash(foam) {
+  if (!foam) return 0;
+  const periodic = foam.isPeriodic ? 1 : 0;
+  const np = foam.points?.length || 0;
+  const nt = foam.simplices?.length || 0;
+  const ve = foam.voronoiEdges?.length || 0;
+  // sample a subset of voronoi edge keys for stability
+  let keyAcc = 0;
+  if (foam.voronoiEdges && foam.voronoiEdges.length) {
+    const N = Math.min(256, foam.voronoiEdges.length);
+    for (let i=0;i<N;i++) {
+      const [a,b] = foam.voronoiEdges[i];
+      keyAcc = ((keyAcc * 1315423911) ^ (a*73856093 ^ b*19349663)) >>> 0;
+    }
+  }
+  // simple mix
+  let h = 2166136261 >>> 0;
+  function mix(x){ h ^= x>>>0; h = (h * 16777619) >>> 0; }
+  mix(periodic); mix(np); mix(nt); mix(ve); mix(keyAcc);
+  return h >>> 0;
+}
+
 
