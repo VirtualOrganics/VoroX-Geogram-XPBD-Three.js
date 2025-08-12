@@ -5,12 +5,8 @@
 A WebAssembly-powered 3D periodic Delaunay-Voronoi triangulation library for the browser, combining the computational power of [Geogram](https://github.com/BrunoLevy/geogram) with the visualization capabilities of [Three.js](https://github.com/mrdoob/three.js). This variant adds a VoroX-inspired circumcenter-based Voronoi construction alongside the existing barycenter method.
 
 <p align="center">
-  <img src="docs/Geogram_3JS_1.png" alt="Geogram-VoroX-Three.js Demo" width="35%">
-  <img src="docs/Geogram_3JS_2.png" alt="Geogram-VoroX-Three.js Screenshot" width="35%"> 
-</p>
-<p align="center">
-  <img src="docs/Geogram_3JS_3.png" alt="Geogram-VoroX-Three.js Screenshot 3" width="35%">
-  <img src="docs/Geogram_3JS_4.png" alt="Geogram-VoroX-Three.js Screenshot 4" width="35%">
+  <img src="docs/screenshot-1.png" alt="Geogram-VoroX-Three.js Demo" width="35%">
+  <img src="docs/screenshot-2.png" alt="Geogram-VoroX-Three.js Screenshot" width="35%"> 
 </p>
 
 ## Features
