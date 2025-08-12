@@ -2026,7 +2026,8 @@
             function tick() {
                 if (!runOn) return;
 
-                const maxFrames = parseInt(document.getElementById('dynMaxFramesNum').value);
+                const maxFramesEl = document.getElementById('dynMaxFramesNum');
+                const maxFrames = maxFramesEl ? parseInt(maxFramesEl.value) : 0; // default 0 = no limit
                 if (maxFrames > 0 && frameCounter >= maxFrames) {
                     runOn = false;
                     runBtn.style.backgroundColor = '';
