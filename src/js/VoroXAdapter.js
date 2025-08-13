@@ -91,14 +91,7 @@ export async function createVoroX({ Module, points, periodic=true, centering='ci
     lastStats = { affectedFaces: 0, meanDelta: 0, maxDelta: 0 };
     let g = null;
     if (useXPBD && useEdgeMode && edgeScores && edgeScores.size > 0) {
-      // XPBD face-area constraints driven by edge scores
-      let edgeToFace = foam.__edgeFaceMapCache;
-      if (!edgeToFace || edgeToFace.size === 0) {
-        const graph = buildVoronoiEdgeGraph(foam);
-        edgeToFace = graph.edgeToFace;
-        foam.__edgeFaceMapCache = edgeToFace;
-      }
-
+      // XPBD per‑tet volume constraints driven by edge scores
       const triArea = (a, b, c) => {
         const ab = [b[0]-a[0], b[1]-a[1], b[2]-a[2]];
         const ac = [c[0]-a[0], c[1]-a[1], c[2]-a[2]];
@@ -107,74 +100,81 @@ export async function createVoroX({ Module, points, periodic=true, centering='ci
         const cz = ab[0]*ac[1] - ab[1]*ac[0];
         return 0.5 * Math.hypot(cx, cy, cz);
       };
-      const centroid = (a, b, c) => [(a[0]+b[0]+c[0])/3, (a[1]+b[1]+c[1])/3, (a[2]+b[2]+c[2])/3];
-      const norm = (v)=>{ const n=Math.hypot(v[0],v[1],v[2])||1e-12; return [v[0]/n, v[1]/n, v[2]/n]; };
       const wrap = (p)=> periodic ? [((p[0]%1)+1)%1, ((p[1]%1)+1)%1, ((p[2]%1)+1)%1] : p;
+      const sub = (x,y)=>[x[0]-y[0], x[1]-y[1], x[2]-y[2]];
+      const cross = (u,v)=>[u[1]*v[2]-u[2]*v[1], u[2]*v[0]-u[0]*v[2], u[0]*v[1]-u[1]*v[0]];
+      const len = (v)=>Math.hypot(v[0],v[1],v[2]);
+      const norm = (v)=>{ const L=len(v)||1e-12; return [v[0]/L,v[1]/L,v[2]/L]; };
+      const tetVolume = (a,b,c,d)=>{
+        const ab=sub(b,a), ac=sub(c,a), ad=sub(d,a);
+        const cx=cross(ab,ac);
+        return Math.abs((cx[0]*ad[0]+cx[1]*ad[1]+cx[2]*ad[2]))/6;
+      };
+      const volGrads = (a,b,c,d)=>{
+        // Gradients w.r.t vertices for signed volume (up to sign). Use consistent set.
+        const gA = cross(sub(b,d), sub(c,d));
+        const gB = cross(sub(c,d), sub(a,d));
+        const gC = cross(sub(a,d), sub(b,d));
+        const gD = cross(sub(b,a), sub(c,a));
+        return [gA,gB,gC,gD].map(g=>[g[0]/6, g[1]/6, g[2]/6]);
+      };
 
-      // Build faces list once with per-face percentage directive p
-      const faces = [];
-      edgeScores.forEach((s, key) => {
-        const face = edgeToFace.get(key);
-        if (!face) return;
-        const [i,j,k] = face;
-        const a = pointsArray[i], b = pointsArray[j], c = pointsArray[k];
-        const A0 = triArea(a,b,c); // used only to early-out degenerate faces
-        if (!(A0 > 0)) return;
-        // Signed distance from threshold (respect invert)
+      // Build per‑tet percentage directive p_tet via accumulation from edges
+      const graph = buildVoronoiEdgeGraph(foam);
+      const accum = new Float64Array(foam.simplices.length);
+      const wsum = new Float64Array(foam.simplices.length);
+      graph.nodes.forEach(node=>{
+        const key = node.key;
+        const s = edgeScores.get(key);
+        if (s === undefined) return;
+        const t1 = node.tet1|0, t2 = node.tet2|0;
         const r = xpbdInvert ? (threshold - s) : (s - threshold);
         if ((r < 0 && !contractive) || (r > 0 && !expansive)) return;
         const absr = Math.abs(r);
         const f = (xpbdGamma === 1 || xpbdGamma === 1.0) ? absr : Math.pow(absr, xpbdGamma);
-        const p_raw = (r >= 0 ? +1 : -1) * (xpbdStrength || 0) * f;
-        const maxStep = Math.abs(xpbdMaxScale || 0);
-        const p = Math.max(-maxStep, Math.min(maxStep, p_raw)); // percentage delta per step
-        faces.push({ idx: [i,j,k], p });
+        const c = (r >= 0 ? +1 : -1) * (xpbdStrength || 0) * f;
+        // weight by shared face area if available
+        const face = graph.edgeToFace.get(key);
+        let w = 1;
+        if (face) {
+          const [i,j,k]=face; const A=triArea(pointsArray[i],pointsArray[j],pointsArray[k]); if (A>0 && isFinite(A)) w=A;
+        }
+        accum[t1]+=w*c; wsum[t1]+=w; accum[t2]+=w*c; wsum[t2]+=w;
       });
+      const maxStep = Math.abs(xpbdMaxScale || 0);
+      const pTet = new Float64Array(accum.length);
+      for (let t=0;t<pTet.length;t++){
+        const w=wsum[t]||0; if (w<=1e-12||!isFinite(w)) { pTet[t]=0; continue; }
+        const v=accum[t]/w; pTet[t]=Math.max(-maxStep, Math.min(maxStep, v));
+      }
 
       const softness = 1 / (1 + 1e4 * Math.max(0, xpbdCompliance));
       const perIterClamp = Math.max(0, xpbdClamp);
       const iters = Math.max(1, (xpbdIters|0));
-      let sumDelta = 0;
-      let samples = 0;
-      let globalMax = 0;
-
+      let sumDelta = 0, samples = 0, globalMax = 0;
       for (let iter=0; iter<iters; iter++) {
-        for (const f of faces) {
-          const [i,j,k] = f.idx;
-          const a = pointsArray[i], b = pointsArray[j], c = pointsArray[k];
-          const Acur = triArea(a,b,c) || 1e-12;
-          // percentage-based target area for this iteration
-          const Atgt = Acur * (1 + f.p);
-          const err = Atgt - Acur; // >0 means expand, <0 contract
-          if (Math.abs(err) < 1e-8) continue;
-          const ctr = centroid(a,b,c);
-          const dirOut = [
-            norm([a[0]-ctr[0], a[1]-ctr[1], a[2]-ctr[2]]),
-            norm([b[0]-ctr[0], b[1]-ctr[1], b[2]-ctr[2]]),
-            norm([c[0]-ctr[0], c[1]-ctr[1], c[2]-ctr[2]])
-          ];
-          const sgn = err > 0 ? +1 : -1; // +1 expand, -1 contract
-          // Normalize by current area to keep scale-free behavior
-          const mag = softness * Math.min(perIterClamp, Math.abs(err) / (Acur + 1e-12));
-          // Per-face deltas (same magnitude per vertex)
-          const dA = mag, dB = mag, dC = mag;
-          const localMax = Math.max(dA, dB, dC);
-          if (localMax > 0) {
-            lastStats.affectedFaces += 1;
-            sumDelta += (dA + dB + dC) / 3;
-            samples += 1;
-            if (localMax > globalMax) globalMax = localMax;
-          }
-          // Apply equally to vertices
-          const apply = (p, d) => wrap([ p[0] + sgn * d[0] * mag, p[1] + sgn * d[1] * mag, p[2] + sgn * d[2] * mag ]);
-          pointsArray[i] = apply(a, dirOut[0]);
-          pointsArray[j] = apply(b, dirOut[1]);
-          pointsArray[k] = apply(c, dirOut[2]);
+        for (let ti=0; ti<foam.simplices.length; ti++){
+          const p = pTet[ti]; if (Math.abs(p) <= 1e-8) continue;
+          const tet = foam.simplices[ti]; if (!tet) continue;
+          const ia=tet[0], ib=tet[1], ic=tet[2], id=tet[3];
+          const A=pointsArray[ia], B=pointsArray[ib], C=pointsArray[ic], D=pointsArray[id];
+          const Vcur = tetVolume(A,B,C,D);
+          if (!(Vcur>1e-12) || !isFinite(Vcur)) continue;
+          const Vtgt = Vcur * (1 + p);
+          const err = Vtgt - Vcur; if (Math.abs(err) < 1e-10) continue;
+          const grads = volGrads(A,B,C,D).map(norm);
+          const sgn = err > 0 ? +1 : -1;
+          const mag = softness * Math.min(perIterClamp, Math.abs(err)/(Vcur + 1e-12));
+          const apply = (P, gvec)=> wrap([ P[0] + sgn * gvec[0]*mag, P[1] + sgn * gvec[1]*mag, P[2] + sgn * gvec[2]*mag ]);
+          const before = [A.slice(),B.slice(),C.slice(),D.slice()];
+          pointsArray[ia]=apply(A,grads[0]); pointsArray[ib]=apply(B,grads[1]); pointsArray[ic]=apply(C,grads[2]); pointsArray[id]=apply(D,grads[3]);
+          const deltas=[len(sub(pointsArray[ia],before[0])), len(sub(pointsArray[ib],before[1])), len(sub(pointsArray[ic],before[2])), len(sub(pointsArray[id],before[3]))];
+          const localMax = Math.max(...deltas);
+          if (localMax>0){ lastStats.affectedFaces += 1; sumDelta += (deltas[0]+deltas[1]+deltas[2]+deltas[3])/4; samples += 1; if (localMax>globalMax) globalMax=localMax; }
         }
       }
       lastStats.meanDelta = samples ? (sumDelta / samples) : 0;
       lastStats.maxDelta = globalMax;
-      // Diagnostics vector: zeros (not used by XPBD)
       g = Array.from({length: pointsArray.length}, ()=>[0,0,0]);
     } else {
       // Gradient-based integration (Verlet/Euler only here; XPBD path above bypasses integrators)
