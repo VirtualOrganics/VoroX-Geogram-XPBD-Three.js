@@ -88,6 +88,16 @@ In “Edge Coloring System”:
 
 [Live Demo](https://virtualorganics.github.io/Geogram-VoroX-Three.js/)
 
+## What's New (XPBD Edge Mode)
+
+- Worker-first Brain: edge scoring (PR/MC) runs off the main thread; UI stays responsive. The Brain slot posts/returns via a worker and the Physical phase runs between Brain slots.
+- XPBD Physical phase (edge mode): per-face area constraints using percentage targets p each step.
+  - p = g · sign(s−t) · |s−t|^γ, clamped to ±Max face scale/step
+  - Controls: Strength g (default 0.001), Shaping γ (default 1.0), Inverse, Max face scale/step, Retriangulate every
+  - Contractive/Expansive gate the sign; Equilibration can be used separately or turned off
+- Topology-change priming: after retriangulation the system skips one XPBD frame, primes dual caches on the next Brain slot, and forces a Brain recompute for the new foamHash.
+- Verlet/Euler are used only for the legacy gradient path; hidden/ignored under XPBD edge mode.
+
 ## VoroX Dynamics Controls: The Brain of the Simulation
 
 The "Flow Dynamics" section provides detailed control over the simulation's physics and appearance. These controls are the "brain" of the program, allowing you to guide a self-organizing system of points as it seeks a state of equilibrium. The simulation's goal is to arrange the points into a stable, balanced structure, much like bubbles in a foam. The controls let you define the "laws of physics" for this system.
@@ -121,7 +131,8 @@ These are your instruments for observing the invisible structures that emerge fr
 ## Quick Start
 ### Two-phase loop (Brain → Physical×N)
 - Brain (PR/MC) computes edge scores and updates the legend; now optionally offloaded to a Web Worker for smoother UI.
-- Physical runs XPBD per-face constraints for N steps using the last Brain scores. Controls: physPerBrain, xpbdMaxScale, damping, etc.
+- Physical runs XPBD per-face constraints for N steps using the last Brain scores. Controls: physPerBrain, xpbdMaxScale, Strength g, Shaping γ, Inverse, Retriangulate every.
+- After retriangulation, XPBD pauses for one frame; caches are primed on the next Brain slot, then normal cadence resumes.
 
 ### Worker offload (experimental)
 - The Brain step (adjacency + PR/MC) can run in `src/js/workers/brain.worker.js`.

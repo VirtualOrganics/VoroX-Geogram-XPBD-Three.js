@@ -203,10 +203,29 @@
             <div class="inline-pair" title="Contract faces with score < threshold"><input type="checkbox" id="dynContractive"><label>Contractive</label></div>
             <div class="inline-pair" title="Expand faces with score > threshold"><input type="checkbox" id="dynExpansive"><label>Expansive</label></div>
         </div>
+        <div class="control-group row-2">
+            <div class="inline-pair" title="Invert XPBD response (treat score-threshold as negative)"><input type="checkbox" id="xpbdInvert"><label>Inverse (XPBD)</label></div>
+        </div>
         <div class="control-group slider-group" title="Velocity damping for Verlet integration">
             <label for="dynDamping">Damping</label>
             <input type="range" id="dynDamping" min="0.8" max="1.0" step="0.01" value="0.99">
             <input type="number" id="dynDampingNum" min="0.8" max="1.0" step="0.01" value="0.99">
+        </div>
+        <div class="control-group row-2" title="Max per-face scale change per Physical step (XPBD)">
+            <label for="xpbdMaxScale">Max face scale/step</label>
+            <input type="number" id="xpbdMaxScale" min="0" max="0.5" step="0.01" value="0.08">
+        </div>
+        <div class="control-group row-2" title="Strength g: scales per-face percentage change">
+            <label for="xpbdStrength">Strength (g)</label>
+            <input type="number" id="xpbdStrength" min="0" max="1" step="0.001" value="0.001">
+        </div>
+        <div class="control-group row-2" title="Shaping exponent γ: curve response vs |s−t| (1.0 = linear)">
+            <label for="xpbdGamma">Shaping (γ)</label>
+            <input type="number" id="xpbdGamma" min="0.25" max="3" step="0.05" value="1.0">
+        </div>
+        <div class="control-group row-2" title="Retriangulate every N Physical steps (testing)">
+            <label for="retriEvery">Retriangulate every</label>
+            <input type="number" id="retriEvery" min="1" max="10000" step="1" value="10">
         </div>
         
         <!-- PageRank Edge Coloring System -->
@@ -1776,47 +1795,22 @@
             
             // Use edge-based or tetrahedra-based scoring
             if (opts.useEdgeMode) {
-                // Edge-based PageRank scoring
+                // Edge-based scoring via adapter (XPBD path); let adapter handle movement
                 const edgeResult = calculateEdgeScores(foam, depth, 0.85);
                 lastEdgeScores = edgeResult.scores;
-                
-                // Compute gradient with edge-based forces
-                const gradientOpts = {
+                const stepOptions = {
+                    ...opts,
                     useEdgeMode: true,
+                    useXPBD: true,
                     edgeScores: lastEdgeScores,
                     edge_scale: opts.edgeScale,
-                    scale: opts.scale,
-                    energy: opts.energy,
-                    equilibration: opts.equilibration,
-                    contractive: opts.contractive,
-                    expansive: opts.expansive,
-                    threshold: opts.threshold,
-                    searchDepth: depth
+                    xpbdMaxScale: Math.max(0, Math.min(0.5, parseFloat(document.getElementById('xpbdMaxScale')?.value || '0.08'))),
+                    xpbdInvert: !!document.getElementById('xpbdInvert')?.checked,
                 };
-                
-                const forces = gradient(foam, gradientOpts);
-                
-                // Use Verlet or Euler integration
-                if (opts.useVerlet) {
-                    // Initialize Verlet integrator if needed
-                    if (!verletIntegrator || verletIntegrator.numPoints !== foam.points.length) {
-                        verletIntegrator = createVerletSystem(foam.points.length, foam.isPeriodic);
-                        verletIntegrator.initialize(foam.points);
-                    }
-                    
-                    // Update Verlet with current positions and forces
-                    verletIntegrator.setPositions(foam.points);
-                    verletIntegrator.setForces(forces);
-                    verletIntegrator.setDamping(opts.damping);
-                    
-                    // Integrate
-                    const newPoints = verletIntegrator.integrate(dt);
-                    voroxInstance.setPoints(newPoints);
-                } else {
-                    // Use legacy Euler integration
-                    const newPoints = integratePoints(foam.points, forces, dt, foam.isPeriodic);
-                    voroxInstance.setPoints(newPoints);
-                }
+                stepOptions.xpbdStrength = Math.max(0, Math.min(1, parseFloat(document.getElementById('xpbdStrength')?.value || '0.001')));
+                stepOptions.xpbdGamma = Math.max(0.25, Math.min(3, parseFloat(document.getElementById('xpbdGamma')?.value || '1.0')));
+                stepOptions.recomputeEvery = Math.max(1, Math.min(10000, parseInt(document.getElementById('retriEvery')?.value || '10')));
+                voroxInstance.step(dt, stepOptions, null);
             } else {
                 // Legacy tetrahedra-based scoring
                 scores = calculateScores(foam, depth);
