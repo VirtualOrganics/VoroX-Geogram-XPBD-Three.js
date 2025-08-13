@@ -2310,6 +2310,18 @@
                 });
             });
 
+            // Hide/show Verlet controls when Edge PageRank (XPBD) is ON
+            function updateVerletVisibility(){
+                const useEdge = !!document.getElementById('dynUseEdgeMode')?.checked;
+                const verletChk = document.getElementById('dynUseVerlet')?.closest('.inline-pair');
+                const dampingGroup = document.getElementById('dynDamping')?.closest('.control-group');
+                if (verletChk) verletChk.style.display = useEdge ? 'none' : '';
+                if (dampingGroup) dampingGroup.style.display = useEdge ? 'none' : '';
+            }
+            updateVerletVisibility();
+            const edgeToggle = document.getElementById('dynUseEdgeMode');
+            if (edgeToggle) edgeToggle.addEventListener('change', updateVerletVisibility);
+
             function scheduleAutoRecompute(){
                 if (autoTimeout) { clearTimeout(autoTimeout); autoTimeout = null; }
                 autoTimeout = setTimeout(()=>{
